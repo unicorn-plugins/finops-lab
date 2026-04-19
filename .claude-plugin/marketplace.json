@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "finops",
+  "owner": {
+    "name": "hiondal",
+    "email": "hiondal@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "finops",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}

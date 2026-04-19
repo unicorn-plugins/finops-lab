@@ -1,0 +1,13 @@
+# finops 플러그인 — 설치 매니페스트
+# 코어 4단계(@why-finops → @inform → @optimize → @operate → @review)는 외부 의존성 0
+# @ppt-writer 이미지 생성 시에만 generate_image(Python+Gemini) 필요
+
+mcp_servers: []
+
+lsp_servers: []
+
+custom_tools:
+  - name: generate_image
+    description: "Gemini(Nano Banana) 기반 교육용 이미지 생성 — @ppt-writer 슬라이드 일러스트"
+    source: tools/generate_image.py
+    required: false

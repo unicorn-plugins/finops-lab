@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(C:\\Users\\hiond\\workspace\\dmap/**)",
+      "Write(C:\\Users\\hiond\\workspace\\dmap/**)",
+      "Edit(C:\\Users\\hiond\\workspace\\dmap/**)",
+      "Bash(python C:\\Users\\hiond\\workspace\\dmap/**)",
+      "Bash(python3 C:\\Users\\hiond\\workspace\\dmap/**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\hiond\\workspace\\dmap"
+    ]
+  }
+}

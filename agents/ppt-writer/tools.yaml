@@ -1,0 +1,15 @@
+tools:
+  - name: file_read
+    description: "산출물·ppt-guide·이미지 파일 경로 확인"
+    input: { 파일경로 }
+    output: { 파일내용 }
+
+  - name: file_write
+    description: "Marp deck md, index.md, 이미지 매핑 기록 파일 저장"
+    input: { 파일경로, 내용 }
+    output: { 저장결과 }
+
+  - name: image_generate
+    description: "Gemini(Nano Banana) 기반 교육용 일러스트 생성. 흰 배경·깔끔한 선·전문적 스타일 지정 프롬프트 사용"
+    input: { 프롬프트, 출력경로 }
+    output: { 이미지파일경로 }

@@ -1,0 +1,28 @@
+# 보안·민감 파일
+.env
+.env.*
+!.env.example
+gateway/tools/.env
+
+# OS/IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# 캐시·임시
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+node_modules/
+.cache/
+
+# DMAP/OMC 내부
+.dmap/
+.omc/
+
+# (중요) output/ 은 제외하지 않음 — 산출물 보존

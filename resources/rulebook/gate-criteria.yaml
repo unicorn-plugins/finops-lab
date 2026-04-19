@@ -1,0 +1,198 @@
+version: "1.0"
+last_updated: "2026-04-18"
+description: "FinOps 게이트 기준 — (주)하이브리지텔레콤 (HBT) 정량 통과 조건"
+reference: "finops.md §4.12 — 단위 경제와 KPI / sample-files-plan.md §3.12"
+context:
+  company: "HBT (주)하이브리지텔레콤"
+  plugin: "finops-lab"
+  maturity_target: "Crawl → Walk (1년 내 달성)"
+  covers_ref: "covers-principles.yaml"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 게이트 기준 목록
+# 각 항목은 스킬 실행 결과(out/) 검증 시 통과 여부 판정에 사용됩니다.
+# ─────────────────────────────────────────────────────────────────────────────
+gates:
+
+  TAGGING_COVERAGE:
+    display_name: "태깅 커버리지"
+    operator: ">="
+    threshold: 95
+    unit: "%"
+    description: "필수 태그(Project·Environment·Owner·CostCenter) 4종이 모두 적용된 리소스 비율"
+    measurement:
+      formula: "(태그 4종 완비 리소스 수 / 전체 리소스 수) × 100"
+      data_source:
+        - "aws-cur-sample.csv (resource_tags_user_* 컬럼)"
+        - "azure-export-sample.csv (Tags JSON)"
+        - "gcp-billing-sample.csv (labels JSON)"
+      aggregation: "CSP 전체 합산 (리소스 수 기준)"
+    current_baseline: 85
+    target: 95
+    unit_note: "리소스 단위 (행 단위가 아닌 고유 resource_id 기준)"
+    on_failure:
+      action: "tag-governor 에이전트 실행 → 위반 리소스 목록 출력 → 오너 알림"
+      escalation: "72시간 내 미수정 시 FinOps팀장 에스컬레이션"
+      jira_label: "finops-tag-violation"
+    responsible_agent: "tag-governor (@inform)"
+    covers_ref: "COVERS-O-01, COVERS-O-02, COVERS-R-02, COVERS-S-02"
+    finops_ref: "finops.md §4.6 — 태그 기반 비용 추적/할당"
+
+  FORECAST_MAPE:
+    display_name: "비용 예측 정확도 (MAPE)"
+    operator: "<="
+    threshold: 10
+    unit: "%"
+    description: "월간 비용 예측값과 실제 청구값의 평균 절대 퍼센트 오차"
+    measurement:
+      formula: "(|예측값 - 실제값| / 실제값) × 100 의 평균"
+      data_source:
+        - "focus-normalized.csv (BilledCost 월 합계)"
+        - "내부 예측 모델 출력값"
+      aggregation: "전체 CSP 합산 월 총액 기준"
+    current_baseline: null
+    target: 10
+    unit_note: "MAPE: Mean Absolute Percentage Error (finops.md §4.12)"
+    on_failure:
+      action: "예측 모델 재학습 또는 파라미터 조정 검토"
+      escalation: "연속 2개월 초과 시 모델 고도화 태스크 생성"
+      jira_label: "finops-forecast-miss"
+    responsible_agent: "finops-practitioner (@operate)"
+    covers_ref: "COVERS-R-03"
+    finops_ref: "finops.md §4.12 — 예측 정확도 MAPE 10% 이내"
+
+  RI_UTILIZATION:
+    display_name: "RI/SP 활용률"
+    operator: ">="
+    threshold: 80
+    unit: "%"
+    description: "구매한 Reserved Instance·Savings Plan 중 실제 사용된 비율"
+    measurement:
+      formula: "(CommitmentDiscountStatus=Used 행의 EffectiveCost 합) / (Used + Unused 행의 EffectiveCost 합) × 100"
+      data_source:
+        - "focus-normalized.csv (CommitmentDiscountStatus 컬럼)"
+      aggregation: "CSP별 및 전체 합산"
+    current_baseline: null
+    target: 80
+    unit_note: "Used: 약정이 실제 사용에 적용됨 / Unused: 약정이 낭비됨"
+    on_failure:
+      action: "미사용 RI 원인 분석 → 인스턴스 교체 또는 RI 수정/판매 검토"
+      escalation: "활용률 60% 미만 시 RI 구매 즉시 중단 및 재검토"
+      jira_label: "finops-ri-underutilized"
+    responsible_agent: "commit-planner (@optimize)"
+    covers_ref: "COVERS-E-04"
+    finops_ref: "finops.md §4.10 — 약정 할인 의사결정 / §4.12 RI/SP 활용률 80% 이상"
+
+  ANOMALY_DETECT_LATENCY:
+    display_name: "이상 비용 탐지 지연 시간"
+    operator: "<="
+    threshold: 24
+    unit: "hours"
+    description: "이상 비용 발생 시각부터 담당자 알림 발송까지 소요 시간"
+    measurement:
+      formula: "알림 발송 시각 - 이상 비용 발생 시각 (시간 단위)"
+      data_source:
+        - "aws-cur-sample.csv / azure-export-sample.csv / gcp-billing-sample.csv (날짜 컬럼)"
+        - "슬랙 #finops-review 채널 알림 타임스탬프"
+      aggregation: "이상 이벤트별 측정 (최대값 기준)"
+    current_baseline: null
+    target: 24
+    unit_note: "목표: 이상 발생 당일(24h) 이내 탐지·알림"
+    on_failure:
+      action: "탐지 파이프라인 점검 → 알림 설정 재확인 → 수동 알림 발송"
+      escalation: "48시간 초과 시 FinOps팀 SLA 위반 처리"
+      jira_label: "finops-anomaly-sla"
+    responsible_agent: "cost-analyst (@inform)"
+    covers_ref: "COVERS-R-01"
+    finops_ref: "finops.md §4.5 — 이상 비용 탐지 체계 5단계"
+    sample_events:
+      - provider: AWS
+        resource: i-spike-001
+        event_date: "2026-03-15"
+        description: "EC2 c5.2xlarge 일일 비용 $12 → $36 (3배 급등)"
+      - provider: Azure
+        resource: vm-spike-azure
+        event_date: "2026-03-20"
+        description: "VM 비용 급증"
+      - provider: GCP
+        resource: gce-spike-1
+        event_date: "2026-03-25"
+        description: "GCE 비용 $8 → $24 (3배 급등)"
+
+  IDLE_RESOURCE_RATE:
+    display_name: "유휴 리소스 비율"
+    operator: "<="
+    threshold: 3
+    unit: "%"
+    description: "전체 과금 리소스 중 유휴(CPU 사용률 5% 미만, 7일 이상 지속) 리소스의 비율"
+    measurement:
+      formula: "(유휴 리소스 수 / 전체 과금 리소스 수) × 100"
+      data_source:
+        - "utilization-sample.csv (avg_cpu_percent 컬럼)"
+        - "aws-cur-sample.csv / azure-export-sample.csv / gcp-billing-sample.csv"
+      aggregation: "CSP 전체 합산 (고유 리소스 ID 기준)"
+      idle_criteria: "avg_cpu_percent < 5 AND 7일 이상 연속 또는 status = stopped"
+    current_baseline: null
+    target: 3
+    unit_note: "stopped EC2(i-idle-*), 고아 EBS(vol-orphan-*), 미사용 Azure Disk 등 포함"
+    on_failure:
+      action: "유휴 리소스 목록 출력 → 중지/삭제 여부 오너 확인 → 72시간 내 처리"
+      escalation: "비율 10% 초과 시 긴급 최적화 태스크 생성"
+      jira_label: "finops-idle-resource"
+    responsible_agent: "rightsize-advisor (@optimize)"
+    covers_ref: "COVERS-E-01"
+    finops_ref: "finops.md §4.8 — 미사용 리소스 제거 (CPU 1% 미만 2주 지속)"
+    sample_idle_resources:
+      AWS:
+        - resource_id: "i-idle-001"
+          type: "EC2 (stopped)"
+          issue: "usage_amount=0, 부착 EBS(vol-idle-001) 비용 지속 발생"
+        - resource_id: "i-idle-002"
+          type: "EC2 (stopped)"
+          issue: "usage_amount=0, 부착 EBS(vol-idle-002) 비용 지속 발생"
+        - resource_id: "vol-orphan-001"
+          type: "EBS (orphan)"
+          issue: "연결된 EC2 없음, 500GB gp3 $1.33/day 지속 과금"
+        - resource_id: "vol-orphan-002"
+          type: "EBS (orphan)"
+          issue: "연결된 EC2 없음, 500GB gp3 $1.33/day 지속 과금"
+        - resource_id: "vol-orphan-003"
+          type: "EBS (orphan)"
+          issue: "연결된 EC2 없음, 500GB gp3 $1.33/day 지속 과금"
+      Azure:
+        - resource_id: "disk-orphan-a"
+          type: "Managed Disk (orphan)"
+          issue: "VM 없이 미사용 상태 유지"
+        - resource_id: "disk-orphan-b"
+          type: "Managed Disk (orphan)"
+          issue: "VM 없이 미사용 상태 유지"
+      GCP:
+        - resource_id: "gce-idle-1"
+          type: "GCE (underutilized)"
+          issue: "CPU 20% 유지, n2-standard-4 과잉 프로비저닝"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Walk 단계 달성 종합 판정 기준
+# ─────────────────────────────────────────────────────────────────────────────
+walk_stage_criteria:
+  description: "아래 5개 게이트를 모두 통과해야 Crawl→Walk 전환으로 인정"
+  gates:
+    - gate: TAGGING_COVERAGE
+      condition: ">= 95%"
+      weight: "필수"
+    - gate: FORECAST_MAPE
+      condition: "<= 10%"
+      weight: "필수"
+    - gate: RI_UTILIZATION
+      condition: ">= 80%"
+      weight: "권장 (Walk 달성 후 3개월 내)"
+    - gate: ANOMALY_DETECT_LATENCY
+      condition: "<= 24h"
+      weight: "필수"
+    - gate: IDLE_RESOURCE_RATE
+      condition: "<= 3%"
+      weight: "권장"
+  additional_requirements:
+    - "월간 FinOps 리뷰 3개월 연속 운영"
+    - "단위 경제 KPI 3종 측정 시작 (MAU당·API당·ML 학습당 비용)"
+    - "전 프로젝트 예산 경보 자동화 적용"

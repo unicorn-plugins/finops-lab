@@ -1,0 +1,257 @@
+version: "1.1"
+last_updated: "2026-04-18"
+description: "COVERS 6원칙 기반 FinOps 규칙 ID 체계 — (주)하이브리지텔레콤 (HBT)"
+reference: "finops.md §4.3 — FinOps 6대 원칙 COVERS"
+context:
+  company: "HBT (주)하이브리지텔레콤"
+  plugin: "finops-lab"
+  total_rules: 18
+  mnemonic: "COVERS — FinOps는 기술 비용의 모든 것을 커버한다"
+
+principles:
+
+  # ──────────────────────────────────────────────────────────────────
+  # C — Collaboration (팀 간 협업)
+  # 엔지니어링·재무·비즈니스팀이 함께 의사결정, 사일로 허물기
+  # ──────────────────────────────────────────────────────────────────
+  Collaboration:
+    id_prefix: "COVERS-C"
+    full_name: "Collaboration"
+    korean: "팀 간 협업"
+    description: >
+      엔지니어링·재무·비즈니스팀이 클라우드 지출에 대해 함께 의사결정하고,
+      조직 사일로를 허물어 비용 최적화를 공동 달성한다.
+    finops_ref: "finops.md §4.3"
+    rules:
+      - id: "COVERS-C-01"
+        name: "월간 공동 비용 리뷰"
+        description: "FinOps팀·개발팀·비즈니스팀·재무팀이 월 1회 이상 공동 비용 리뷰를 수행한다."
+        rationale: "비용 최적화는 단독 팀이 아닌 관련 팀 전체의 참여와 책임 공유를 통해 지속 가능하다."
+        skill: "@operate"
+        gate_criteria_ref: null
+        hbt_note: "monthly-review-agenda.md 기준, 매월 셋째 주 수요일 10:00 진행"
+
+      - id: "COVERS-C-02"
+        name: "최적화 과제 공동 소유"
+        description: "최적화 과제는 FinOps팀 단독이 아닌 개발팀 오너와 공동 담당자로 지정하여 실행한다."
+        rationale: "개발팀이 비용 영향을 직접 인식하고 실행에 참여해야 지속적인 비용 절감 문화가 형성된다."
+        skill: "@optimize"
+        gate_criteria_ref: null
+        hbt_note: "Jira 이슈 생성 시 Reporter=FinOps팀, Assignee=개발팀 오너 형식 준수"
+
+      - id: "COVERS-C-03"
+        name: "FinOps 채널 상시 운영"
+        description: "Slack #finops-review 채널을 통해 비용 현황·이상 알림·최적화 성과를 정기 공유한다."
+        rationale: "비용 정보의 투명한 공유가 팀 간 협력과 비용 절감 동기를 강화한다."
+        skill: "@inform"
+        gate_criteria_ref: null
+        hbt_note: "월간 리뷰 요약, 이상 비용 알림, RI 구매 공지 등 포함"
+
+  # ──────────────────────────────────────────────────────────────────
+  # O — Ownership (모든 구성원의 오너십)
+  # 엔지니어·PO가 클라우드 지출 책임, "내가 만든 서비스의 비용은 내가 관리"
+  # ──────────────────────────────────────────────────────────────────
+  Ownership:
+    id_prefix: "COVERS-O"
+    full_name: "Ownership"
+    korean: "모든 구성원의 오너십"
+    description: >
+      엔지니어·PO가 자신이 만든 서비스의 클라우드 지출에 책임을 지며,
+      모든 리소스에 명확한 비용 오너를 지정한다.
+    finops_ref: "finops.md §4.3"
+    rules:
+      - id: "COVERS-O-01"
+        name: "필수 태그 Owner 적용"
+        description: "모든 클라우드 리소스에 Owner 태그(담당자 이메일)를 필수 적용한다."
+        rationale: "Owner가 없는 리소스는 비용 귀속이 불가능하여 최적화 실행이 어렵다."
+        skill: "@inform"
+        gate_criteria_ref: "TAGGING_COVERAGE"
+        hbt_note: "Owner=담당자이메일@hbt.co.kr 형식, tag-governor가 자동 탐지 및 알림"
+
+      - id: "COVERS-O-02"
+        name: "CostCenter 명확한 귀속"
+        description: "모든 리소스는 CC-100, CC-200, CC-300 중 하나의 CostCenter에 귀속되어야 한다."
+        rationale: "CostCenter 기반 비용 분해가 없으면 조직 단위 책임 관리가 불가능하다."
+        skill: "@inform"
+        gate_criteria_ref: "TAGGING_COVERAGE"
+        hbt_note: "미귀속 리소스 발생 시 72시간 내 CostCenter 지정 의무"
+
+      - id: "COVERS-O-03"
+        name: "오너 비용 자가 인식"
+        description: "CostCenter 오너는 월간 리뷰 전 자신의 비용 현황을 스스로 파악하고 리뷰에 참석한다."
+        rationale: "오너가 비용을 사전에 인지해야 리뷰 효율이 높아지고 실행 가능한 의사결정이 가능하다."
+        skill: "@operate"
+        gate_criteria_ref: null
+        hbt_note: "월간 리뷰 2일 전까지 각 CostCenter 오너가 비용 현황 셀프 체크"
+
+  # ──────────────────────────────────────────────────────────────────
+  # V — Value-driven (비즈니스 가치 중심)
+  # 단순 절감이 아닌 투자 가치 극대화, 기술 투자가 비즈니스 성과에 기여하는지 측정
+  # ──────────────────────────────────────────────────────────────────
+  Value_driven:
+    id_prefix: "COVERS-V"
+    full_name: "Value-driven"
+    korean: "비즈니스 가치 중심"
+    description: >
+      단순 비용 절감이 아닌 투자 가치 극대화를 목표로 하며,
+      기술 투자가 비즈니스 성과(MAU·API 호출·ML 학습)에 기여하는지 단위 경제로 측정한다.
+    finops_ref: "finops.md §4.3, §4.12"
+    rules:
+      - id: "COVERS-V-01"
+        name: "단위 경제 KPI 정기 측정"
+        description: "MAU당 비용·API 호출당 비용·ML 학습당 비용을 월간 리뷰에서 정기 측정·보고한다."
+        rationale: "클라우드 비용의 절댓값보다 비즈니스 단위당 비용이 효율성을 더 정확히 반영한다."
+        skill: "@operate"
+        gate_criteria_ref: null
+        hbt_note: "company-profile.md Section 8의 KPI 3종 기준. 측정 기반이 갖춰지기 전까지는 추이 방향성만 보고"
+
+      - id: "COVERS-V-02"
+        name: "비용 증가 vs 비즈니스 성장 연계 분석"
+        description: "총 클라우드 비용 증가 시 비즈니스 성장(트래픽·거래량) 대비 단위당 비용이 감소하는지 검증한다."
+        rationale: "총 비용 증가 ≠ FinOps 실패. 비즈니스 성장을 수반하는 비용 증가는 건강한 성장이다."
+        skill: "@operate"
+        gate_criteria_ref: null
+        hbt_note: "월간 리뷰 시 '단위당 비용 추이' 슬라이드 필수 포함"
+
+      - id: "COVERS-V-03"
+        name: "투자 대비 절감 ROI 추적"
+        description: "RI·SP 구매, Right-sizing 등 최적화 투자의 ROI(절감액/투자비용)를 지속 추적한다."
+        rationale: "최적화 활동의 비즈니스 가치를 경영진에게 수치로 증명해야 FinOps 예산이 확보된다."
+        skill: "@optimize"
+        gate_criteria_ref: null
+        hbt_note: "ri-sp-decision-matrix.md ROI 계산 결과를 월간 리포트에 포함"
+
+  # ──────────────────────────────────────────────────────────────────
+  # E — Elastic Utilization (탄력적 자원 활용)
+  # 사용하지 않는 용량 최소화, 수요에 따라 탄력 운영
+  # ──────────────────────────────────────────────────────────────────
+  Elastic_Utilization:
+    id_prefix: "COVERS-E"
+    full_name: "Elastic Utilization"
+    korean: "탄력적 자원 활용"
+    description: >
+      사용하지 않는 용량을 최소화하고, 수요 변화에 따라 리소스를 탄력적으로 운영하여
+      낭비 없이 비즈니스 가치 창출에 최대한 기여한다.
+    finops_ref: "finops.md §4.3, §4.8, §4.9"
+    rules:
+      - id: "COVERS-E-01"
+        name: "유휴 리소스 탐지 및 제거"
+        description: "CPU 사용률 5% 미만으로 7일 이상 지속된 리소스는 중지 또는 삭제를 검토한다."
+        rationale: "유휴 리소스는 비즈니스 가치 없이 비용만 발생시키는 최우선 제거 대상이다."
+        skill: "@optimize"
+        gate_criteria_ref: "IDLE_RESOURCE_RATE"
+        hbt_note: "유휴 리소스 비율 목표: 3% 이하. @optimize 에이전트가 매주 자동 탐지"
+
+      - id: "COVERS-E-02"
+        name: "Right-sizing 정기 수행"
+        description: "CPU/메모리 모두 40% 미만(30일 평균)인 리소스는 다운사이징 검토 대상으로 분류한다."
+        rationale: "과잉 프로비저닝은 HBT 클라우드 낭비의 두 번째 주요 원인이다."
+        skill: "@optimize"
+        gate_criteria_ref: null
+        hbt_note: "월간 리뷰에서 Right-sizing 후보 목록 리뷰, 실행은 개발팀과 협의 후 진행"
+
+      - id: "COVERS-E-03"
+        name: "스케일링 정책 최적화"
+        description: "HPA·VPA·노드 오토 스케일링 정책을 수요 패턴에 맞게 주기적으로 튜닝한다."
+        rationale: "스케일링 정책이 보수적이면 유휴 노드 비용이 발생하고, 공격적이면 피크 시 성능 위험이 있다."
+        skill: "@optimize"
+        gate_criteria_ref: null
+        hbt_note: "개발환경은 비운영 시간대 자동 중지(40~60% 절감 목표)"
+
+      - id: "COVERS-E-04"
+        name: "RI/SP 약정 할인 적용"
+        description: "가동률 80% 이상의 상시 운영 리소스는 RI 또는 Savings Plan으로 약정 커버리지를 확보한다."
+        rationale: "상시 리소스를 On-Demand로 운영하는 것은 30~50%의 불필요한 비용을 발생시킨다."
+        skill: "@optimize"
+        gate_criteria_ref: "RI_UTILIZATION"
+        hbt_note: "ri-sp-decision-matrix.md 의사결정 매트릭스 사용, RI 활용률 목표 80% 이상"
+
+  # ──────────────────────────────────────────────────────────────────
+  # R — Right-time Report (적시 리포팅)
+  # 투명한 비용 데이터를 실시간에 가까운 속도로 제공, 접근성·적시성·정확성 보장
+  # ──────────────────────────────────────────────────────────────────
+  Right_time_Report:
+    id_prefix: "COVERS-R"
+    full_name: "Right-time Report"
+    korean: "적시 리포팅"
+    description: >
+      투명한 비용 데이터를 실시간에 가까운 속도로 모든 이해관계자에게 제공하며,
+      접근성·적시성·정확성을 보장한다.
+    finops_ref: "finops.md §4.3, §4.5, §4.12"
+    rules:
+      - id: "COVERS-R-01"
+        name: "비용 데이터 24시간 내 가시화"
+        description: "CSP 청구 데이터를 수집·정규화하여 24시간 이내에 대시보드에 반영한다."
+        rationale: "지연된 비용 정보는 이미 발생한 낭비를 발견하는 데만 쓰이고 예방에 활용되지 못한다."
+        skill: "@inform"
+        gate_criteria_ref: "ANOMALY_DETECT_LATENCY"
+        hbt_note: "focus-normalized.csv 매일 갱신, 이상 비용 탐지 후 24시간 이내 알림 발송"
+
+      - id: "COVERS-R-02"
+        name: "태깅 커버리지 투명 공개"
+        description: "태깅 커버리지 현황을 CostCenter별로 측정하여 월간 리뷰에서 전체 공개한다."
+        rationale: "공개적 추적이 태깅 준수율을 높이는 가장 효과적인 방법이다."
+        skill: "@inform"
+        gate_criteria_ref: "TAGGING_COVERAGE"
+        hbt_note: "CostCenter별 태깅 준수율을 월간 리뷰 슬라이드에 공개"
+
+      - id: "COVERS-R-03"
+        name: "예측 정확도(MAPE) 관리"
+        description: "월간 비용 예측 MAPE(Mean Absolute Percentage Error)를 10% 이내로 유지한다."
+        rationale: "예측 정확도가 낮으면 예산 편성이 불가능하고 비용 이상 탐지의 기준선이 흔들린다."
+        skill: "@inform"
+        gate_criteria_ref: "FORECAST_MAPE"
+        hbt_note: "예측 모델: 선형 회귀 기반 초기 구현, Walk 단계에서 ML 기반 예측으로 고도화"
+
+      - id: "COVERS-R-04"
+        name: "월간 FinOps 리포트 발행"
+        description: "매월 FinOps 리뷰 후 3영업일 이내 월간 요약 리포트를 발행하여 경영진에게 보고한다."
+        rationale: "정기적인 보고가 없으면 FinOps 활동의 가치가 경영진에게 인식되지 않아 지원이 약화된다."
+        skill: "@operate"
+        gate_criteria_ref: null
+        hbt_note: "이지수 팀장 → CTO/CFO 월간 보고, Notion 위키에 아카이브"
+
+  # ──────────────────────────────────────────────────────────────────
+  # S — Steering (중앙 FinOps 팀 주도)
+  # 전사적 비용 거버넌스(CCoE), 정책은 중앙·일상은 각 팀(연합 거버넌스)
+  # ──────────────────────────────────────────────────────────────────
+  Steering:
+    id_prefix: "COVERS-S"
+    full_name: "Steering"
+    korean: "중앙 FinOps 팀 주도"
+    description: >
+      전사적 비용 거버넌스(CCoE: Cost Center of Excellence)를 중앙 FinOps 팀이 주도하며,
+      정책·표준은 중앙에서 수립하고 일상적 최적화 실행은 각 팀이 담당하는 연합 거버넌스를 운영한다.
+    finops_ref: "finops.md §4.3, §4.13, §4.14"
+    rules:
+      - id: "COVERS-S-01"
+        name: "FOCUS 표준 기반 멀티클라우드 정규화"
+        description: "AWS·Azure·GCP 비용 데이터를 FOCUS v1.1 표준으로 정규화하여 단일 데이터 뷰를 유지한다."
+        rationale: "CSP별 이질적 데이터를 표준화해야 공정한 비교 분석과 자동화가 가능하다."
+        skill: "@inform"
+        gate_criteria_ref: null
+        hbt_note: "focus-v1.yaml 스키마 준수, focus-normalized.csv 매일 갱신"
+
+      - id: "COVERS-S-02"
+        name: "태그 정책 중앙 관리"
+        description: "FinOps팀이 전사 태그 정책(tag-policy.yaml)을 수립하고, tag-governor 에이전트로 자동 감시한다."
+        rationale: "태깅 표준이 팀별로 제각각이면 비용 할당의 정확성과 신뢰성이 떨어진다."
+        skill: "@inform"
+        gate_criteria_ref: "TAGGING_COVERAGE"
+        hbt_note: "위반 리소스는 72시간 내 조치 의무, 미수정 시 FinOps팀 에스컬레이션"
+
+      - id: "COVERS-S-03"
+        name: "FinOps 성숙도 분기 점검"
+        description: "Crawl→Walk 전환 목표(1년)를 분기별로 점검하고, CostCenter별 성숙도를 개별 진단한다."
+        rationale: "전사 평균 점수가 아닌 CostCenter별 강약점을 파악해야 집중 지원이 가능하다."
+        skill: "@operate"
+        gate_criteria_ref: null
+        hbt_note: "Walk 전환 기준: 태깅 95%+, 월별 리뷰, RI 활용률 80%+, KPI 3종 측정"
+
+      - id: "COVERS-S-04"
+        name: "연간 클라우드 예산 편성 참여"
+        description: "FinOps팀은 재무팀의 연간 예산 편성 시 클라우드 예산 산정에 필수적으로 참여한다."
+        rationale: "FinOps팀 참여 없이 편성된 클라우드 예산은 실제 사용 패턴과 괴리가 발생한다."
+        skill: "@operate"
+        gate_criteria_ref: null
+        hbt_note: "예산 편성 시점: 매년 10~11월. 전년 실적 + 사업계획 기반 Bottom-up 예산 산정"

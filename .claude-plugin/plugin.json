@@ -1,0 +1,20 @@
+{
+  "name": "finops",
+  "version": "0.0.1",
+  "description": "FinOps 교재·2026 프레임워크를 4단계(WHY→Inform→Optimize→Operate) + 검증·PPT로 HBT 가상 기업 데이터에 적용해 체득하는 멀티클라우드 FinOps + FinOps for AI 실습 플러그인",
+  "author": {
+    "name": "hiondal",
+    "email": "hiondal@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "finops",
+    "finops-for-ai",
+    "focus",
+    "multi-cloud",
+    "cost-optimization",
+    "unit-economics",
+    "dmap",
+    "plugin"
+  ]
+}

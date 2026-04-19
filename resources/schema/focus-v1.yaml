@@ -1,0 +1,908 @@
+spec_version: "1.3"
+spec_url: "https://focus.finops.org/focus-specification/v1-3/"
+previous_version: "1.1"
+generated: "2026-04-18"
+currency: KRW
+description: "FOCUS v1.3 스키마 정의 — (주)하이브리지텔레콤 (HBT) 멀티클라우드 비용 데이터 표준"
+
+# 버전별 주요 변경 이력
+changelog:
+  "1.3":
+    released: "2026"
+    breaking_changes:
+      - "ProviderName DEPRECATED → ServiceProviderName 으로 교체 (Mandatory)"
+      - "PublisherName DEPRECATED"
+    new_mandatory:
+      - "ServiceProviderName"
+    new_recommended:
+      - "ChargeFrequency"
+      - "ServiceSubcategory"
+    new_conditional:
+      - "BillingAccountType"
+      - "SubAccountType"
+      - "SkuMeter"
+    expanded:
+      - "ServiceCategory 허용값 8개 → 19개 (Analytics, Identity, Security, Media 등 추가)"
+  "1.1":
+    released: "2024"
+    notes:
+      - "ServiceSubcategory 도입 (Recommended)"
+      - "CapacityReservationId/Status 도입"
+      - "CommitmentDiscountQuantity/Unit 도입"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 컬럼 정의
+# feature_level: Mandatory | Recommended | Conditional
+# column_type: Metric | Dimension
+# ─────────────────────────────────────────────────────────────────────────────
+fields:
+
+  # ┌─────────────────────────────────────────────────────────────────────────┐
+  # │ MANDATORY 컬럼 (15종) — 항상 존재해야 하는 필수 컬럼                     │
+  # └─────────────────────────────────────────────────────────────────────────┘
+
+  BilledCost:
+    column_type: Metric
+    feature_level: Mandatory
+    data_type: Decimal
+    nullable: false
+    unit: KRW
+    introduced: "0.5"
+    description: >
+      청구된 실제 비용. 모든 할인이 적용된 후 인보이스 기준 최종 금액(KRW).
+      RI/SP 선불 비용의 상각(Amortization)은 포함하지 않음.
+      현금주의(Cash-basis) 비용 분석·예산 편성·인보이스 대사에 사용.
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#billedcost"
+    example: 1500000.00
+    hbt_notes: "AWS: line_item_unblended_cost × 1500 / Azure: CostInBillingCurrency (이미 KRW) / GCP: cost × 1500"
+
+  EffectiveCost:
+    column_type: Metric
+    feature_level: Mandatory
+    data_type: Decimal
+    nullable: false
+    unit: KRW
+    introduced: "0.5"
+    description: >
+      실질 유효 비용. RI/SP 선불 비용의 상각(Amortization)이 반영된 진짜 비용(KRW).
+      발생주의(Accrual-basis) 비용 분석·최적화·Chargeback에 사용.
+      상시 운영 리소스의 실제 경제적 부담을 정확히 반영.
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#effectivecost"
+    example: 1050000.00
+    hbt_notes: >
+      AWS: AmortizedCost × 1500 / Azure: CostInBillingCurrency (Amortized Export 사용 시 동일) /
+      GCP: (cost + credits_amount) × 1500. RI All Upfront의 경우 약정 기간으로 나눠 일별 상각.
+
+  BillingAccountId:
+    column_type: Dimension
+    feature_level: Mandatory
+    data_type: String
+    nullable: false
+    introduced: "0.5"
+    description: >
+      인보이스 발급 주체(Invoice Issuer)가 부여한 빌링 계정 고유 식별자.
+      조직 구조 그룹화, 인보이스 대사, 비용 할당 전략에 활용.
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#billingaccountid"
+    example: "123456789012"
+    hbt_notes: "AWS: Account ID (12자리) / Azure: Subscription ID (UUID) / GCP: Billing Account ID"
+
+  BillingAccountName:
+    column_type: Dimension
+    feature_level: Mandatory
+    data_type: String
+    nullable: true
+    introduced: "0.5"
+    description: "빌링 계정에 부여된 표시 이름(Display Name)."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#billingaccountname"
+    example: "hbt-prod-aws"
+    hbt_notes: "명명 규칙: {회사약어}-{환경}-{클라우드} / null이면 인보이스 발급처가 표시명 미지원"
+
+  BillingCurrency:
+    column_type: Dimension
+    feature_level: Mandatory
+    data_type: String
+    nullable: false
+    introduced: "0.5"
+    description: "청구 통화 코드. ISO 4217 형식(예: KRW, USD). 인보이스 통화와 일치해야 함."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#billingcurrency"
+    example: "KRW"
+    hbt_notes: "HBT 정규화 후 단일 통화: KRW (환율 $1 = ₩1,500 고정 적용)"
+
+  BillingPeriodStart:
+    column_type: Dimension
+    feature_level: Mandatory
+    data_type: DateTime
+    nullable: false
+    unit: "ISO 8601 UTC"
+    introduced: "0.5"
+    description: "빌링 기간 시작 시각 (inclusive). 청구 항목이 속하는 청구 기간의 시작점(UTC)."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#billingperiodstart"
+    example: "2026-03-01T00:00:00Z"
+    hbt_notes: "AWS/Azure/GCP 모두 월별 청구 기준. 샘플 기간: 2026-03-01"
+
+  BillingPeriodEnd:
+    column_type: Dimension
+    feature_level: Mandatory
+    data_type: DateTime
+    nullable: false
+    unit: "ISO 8601 UTC"
+    introduced: "0.5"
+    description: "빌링 기간 종료 시각 (exclusive). 이 시각 자체는 포함하지 않음."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#billingperiodend"
+    example: "2026-04-01T00:00:00Z"
+    hbt_notes: "exclusive: 2026-04-01T00:00:00Z는 3월 청구 기간에 포함되지 않음"
+
+  ChargePeriodStart:
+    column_type: Dimension
+    feature_level: Mandatory
+    data_type: DateTime
+    nullable: false
+    unit: "ISO 8601 UTC"
+    introduced: "0.5"
+    description: "개별 청구 항목의 기간 시작 시각 (inclusive). 일별 집계 시 해당 일의 00:00:00Z."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#chargeperiodstart"
+    example: "2026-03-15T00:00:00Z"
+    hbt_notes: "AWS: line_item_usage_start_date / Azure: Date / GCP: usage_start_time"
+
+  ChargePeriodEnd:
+    column_type: Dimension
+    feature_level: Mandatory
+    data_type: DateTime
+    nullable: false
+    unit: "ISO 8601 UTC"
+    introduced: "0.5"
+    description: "개별 청구 항목의 기간 종료 시각 (exclusive). 일별 집계 시 다음 날 00:00:00Z."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#chargeperiodend"
+    example: "2026-03-16T00:00:00Z"
+    hbt_notes: "AWS: line_item_usage_end_date / Azure: 다음 날 / GCP: usage_end_time"
+
+  ChargeCategory:
+    column_type: Dimension
+    feature_level: Mandatory
+    data_type: String
+    nullable: false
+    introduced: "0.5"
+    description: "청구 유형의 최상위 분류. 청구 항목의 성격(사용·구매·세금·크레딧·조정)을 구분."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#chargecategory"
+    allowed_values:
+      Usage: "서비스·리소스 사용량 기반 과금 (환불 포함)"
+      Purchase: "선불 또는 정기 구매 (RI/SP 구매 등, 환불 포함)"
+      Tax: "적용 세금 (부가세 등, 환불 포함)"
+      Credit: "서비스 제공자 부여 크레딧 (프로모션 크레딧 등)"
+      Adjustment: "기타 조정 항목 (위 분류에 해당하지 않는 조정)"
+    example: "Usage"
+    hbt_notes: "RI 선불 구매 시 Purchase, 일반 사용은 Usage, AWS 크레딧은 Credit"
+
+  ChargeClass:
+    column_type: Dimension
+    feature_level: Mandatory
+    data_type: String
+    nullable: true
+    introduced: "1.0"
+    description: >
+      행이 이전 청구 기간에 대한 정정(Correction)인지 여부를 나타냄.
+      null이면 정상 청구, 'Correction'이면 이전 기간 청구 오류 수정.
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#chargeclass"
+    allowed_values:
+      Correction: "이전에 인보이스된 청구 기간에 대한 정정 (환불·크레딧 수정 포함)"
+      "null": "정상 청구 행 또는 현재 기간 내 정정"
+    example: null
+    hbt_notes: "샘플 CSV에서 대부분 null. 이상 비용 수정 시 Correction으로 표시."
+
+  ChargeDescription:
+    column_type: Dimension
+    feature_level: Mandatory
+    data_type: String
+    nullable: true
+    introduced: "1.0-preview"
+    description: "청구 행의 목적과 가격에 대한 자체 완결형(Self-contained) 요약. 별도 조회 없이 행을 이해할 수 있도록 제공."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#chargedescription"
+    example: "Amazon EC2 - m5.2xlarge - ap-northeast-2 - On-Demand"
+    hbt_notes: "AWS: line_item_usage_type 조합 / Azure: MeterName+MeterSubCategory / GCP: sku_description"
+
+  ServiceCategory:
+    column_type: Dimension
+    feature_level: Mandatory
+    data_type: String
+    nullable: false
+    introduced: "0.5"
+    description: >
+      서비스의 핵심 기능 기반 최상위 분류. 각 서비스는 하나의 ServiceCategory에만 속함.
+      멀티클라우드 비용 비교·워크로드 마이그레이션 추적에 활용.
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#servicecategory"
+    allowed_values:
+      - "AI and Machine Learning"   # v1.3: GCP Vertex AI, AWS SageMaker
+      - "Analytics"                 # v1.3 신규: BigQuery, Redshift, EMR
+      - "Business Applications"     # v1.3 신규: Microsoft 365 등
+      - "Compute"                   # EC2, GCE, Azure VM, ECS, Cloud Run
+      - "Databases"                 # RDS, Cloud SQL, Azure SQL DB
+      - "Developer Tools"           # CodeBuild, Cloud Build 등
+      - "Identity"                  # v1.3 신규: IAM, Azure AD
+      - "Integration"               # v1.3 신규: SQS, Pub/Sub, API Gateway
+      - "Internet of Things"        # v1.3 신규: IoT 서비스
+      - "Management and Governance" # CloudWatch, Azure Monitor, Cloud Logging
+      - "Media"                     # v1.3 신규: 미디어 스트리밍 서비스
+      - "Migration"                 # v1.3 신규: 데이터 이전 서비스
+      - "Mobile"                    # v1.3 신규: 모바일 관련 서비스
+      - "Multicloud"                # v1.3 신규: 멀티클라우드 지원 서비스
+      - "Networking"                # VPC, VNet, CloudFront, Azure CDN
+      - "Security"                  # v1.3 신규: GuardDuty, Security Center
+      - "Storage"                   # S3, Azure Blob, GCS, EBS
+      - "Web"                       # v1.3 신규: App Service, Cloud Run (Web)
+      - "Other"                     # 위 분류에 해당하지 않는 신규/기타 서비스
+    example: "Compute"
+    hbt_notes: >
+      HBT 주요 매핑:
+      AWS EC2/ECS → Compute / AWS RDS → Databases / AWS S3 → Storage /
+      AWS CloudWatch → Management and Governance / GCP Vertex AI → AI and Machine Learning /
+      GCP BigQuery → Analytics / Azure App Service → Web
+
+  ServiceName:
+    column_type: Dimension
+    feature_level: Mandatory
+    data_type: String
+    nullable: false
+    introduced: "0.5"
+    description: >
+      서비스 제공자가 정의한 서비스 표시 이름(Display Name).
+      ServiceCategory 및 ServiceSubcategory와 1:1:1 관계.
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#servicename"
+    example: "Amazon EC2"
+    hbt_notes: >
+      AWS: Amazon EC2, Amazon RDS, Amazon S3, AWS Lambda /
+      Azure: Virtual Machines, Azure SQL Database, App Service /
+      GCP: Compute Engine, Cloud SQL, Cloud Storage, Vertex AI
+
+  ServiceProviderName:
+    column_type: Dimension
+    feature_level: Mandatory
+    data_type: String
+    nullable: false
+    introduced: "1.3"
+    description: >
+      리소스·서비스를 제공하는 엔티티 이름.
+      v1.3에서 ProviderName(DEPRECATED)을 대체하는 필수 컬럼.
+      마켓플레이스 시나리오에서는 판매자(Seller)를 나타냄.
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#serviceprovidername"
+    replaces: "ProviderName (DEPRECATED in v1.3)"
+    example: "Amazon Web Services"
+    hbt_notes: >
+      AWS: "Amazon Web Services" /
+      Azure: "Microsoft Azure" /
+      GCP: "Google Cloud Platform"
+
+  # ┌─────────────────────────────────────────────────────────────────────────┐
+  # │ RECOMMENDED 컬럼 (2종) — 강력 권장, 미포함 시 기능 제한                  │
+  # └─────────────────────────────────────────────────────────────────────────┘
+
+  ChargeFrequency:
+    column_type: Dimension
+    feature_level: Recommended
+    data_type: String
+    nullable: false
+    introduced: "1.0-preview"
+    description: "청구 발생 주기. 반복 주기 이해·향후 청구 예측·일회성과 반복 구분에 활용."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#chargefrequency"
+    allowed_values:
+      One-Time: "1회만 발생하는 청구 (RI All Upfront 선불 등)"
+      Recurring: "주기적으로 반복되는 청구 (월정액, 연정액 등)"
+      Usage-Based: "사용 시마다 반복되는 청구 (EC2 시간당 과금 등)"
+    example: "Usage-Based"
+    hbt_notes: "RI/SP 선불 구매: One-Time / RI 월별 상각: Recurring / EC2 On-Demand: Usage-Based"
+
+  ServiceSubcategory:
+    column_type: Dimension
+    feature_level: Recommended
+    data_type: String
+    nullable: false
+    introduced: "1.1"
+    description: >
+      ServiceCategory의 2차 분류. ServiceCategory와 함께 서비스 유형을 세부 분류.
+      멀티클라우드 워크로드 유형 분석·마이그레이션 추적에 활용.
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#servicesubcategory"
+    example: "Virtual Machines"
+    hbt_notes: >
+      HBT 주요 매핑:
+      EC2/GCE/Azure VM → Compute > Virtual Machines /
+      ECS/Cloud Run → Compute > Containers /
+      Lambda/Cloud Functions → Compute > Serverless Compute /
+      RDS/Cloud SQL → Databases > Relational Databases /
+      S3/GCS/Azure Blob → Storage > Object Storage /
+      EBS → Storage > Block Storage /
+      CloudWatch/Azure Monitor → Management and Governance > Observability /
+      Vertex AI/SageMaker → AI and Machine Learning > Machine Learning /
+      BigQuery/Redshift → Analytics > Data Processing
+    # 주요 ServiceSubcategory 값 (ServiceCategory별 일부 발췌)
+    allowed_values_sample:
+      "AI and Machine Learning":
+        - "AI Platforms"
+        - "Generative AI"
+        - "Machine Learning"
+        - "Natural Language Processing"
+        - "Other (AI and Machine Learning)"
+      "Analytics":
+        - "Analytics Platforms"
+        - "Business Intelligence"
+        - "Data Processing"
+        - "Streaming Analytics"
+        - "Other (Analytics)"
+      "Compute":
+        - "Containers"
+        - "Serverless Compute"
+        - "Virtual Machines"
+        - "Other (Compute)"
+      "Databases":
+        - "Caching"
+        - "Data Warehouses"
+        - "NoSQL Databases"
+        - "Relational Databases"
+        - "Time Series Databases"
+        - "Other (Databases)"
+      "Management and Governance":
+        - "Observability"
+        - "Cost Management"
+        - "Compliance"
+        - "Other (Management and Governance)"
+      "Networking":
+        - "Application Networking"
+        - "Content Delivery"
+        - "Network Connectivity"
+        - "Network Security"
+        - "Other (Networking)"
+      "Storage":
+        - "Block Storage"
+        - "File Storage"
+        - "Object Storage"
+        - "Backup Storage"
+        - "Other (Storage)"
+
+  # ┌─────────────────────────────────────────────────────────────────────────┐
+  # │ CONDITIONAL 컬럼 — 조건 충족 시 필수 (CSP 지원 여부·관련 컬럼 값에 따라)  │
+  # └─────────────────────────────────────────────────────────────────────────┘
+
+  SubAccountId:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "0.5"
+    description: "빌링 계정 하위의 서브 계정 식별자. 사용량 분리·비용 할당·조직 구조 반영."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#subaccountid"
+    example: "123456789012"
+    hbt_notes: "AWS: linked_account_id / Azure: ResourceGroup / GCP: project_id"
+
+  SubAccountName:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "0.5"
+    description: "서브 계정의 표시 이름."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#subaccountname"
+    example: "hbt-web-prod"
+    hbt_notes: "SubAccountId가 null이 아닐 때 제공"
+
+  BillingAccountType:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: false
+    introduced: "1.2"
+    description: >
+      빌링 계정 유형 이름. CSP가 여러 빌링 계정 유형을 지원할 때 필수.
+      FOCUS 구조와 공급자 구조를 매핑·요약하거나 Chargeback에 활용.
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#billingaccounttype"
+    example: "Management Account"
+    hbt_notes: "AWS: 'Management Account' or 'Linked Account' / Azure: 'Subscription' / GCP: 'Billing Account'"
+
+  SubAccountType:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.2"
+    description: "서브 계정의 유형 이름. BillingAccountType과 유사하게 서브 계정 구조 분류."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#subaccounttype"
+    example: "Resource Group"
+    hbt_notes: "Azure: 'Resource Group' / GCP: 'Project'"
+
+  RegionId:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.0"
+    description: "호스트 공급자가 부여한 리소스 배포 리전 코드. 리전 기반 비용 분석에 활용."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#regionid"
+    example: "ap-northeast-2"
+    hbt_notes: "AWS: ap-northeast-2 / Azure: koreacentral / GCP: asia-northeast3 / 글로벌 서비스는 null"
+
+  RegionName:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.0"
+    description: "리전의 표시 이름. RegionId가 null이면 null, RegionId가 있으면 필수."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#regionname"
+    example: "Asia Pacific (Seoul)"
+    hbt_notes: "AWS: 'Asia Pacific (Seoul)' / Azure: 'Korea Central' / GCP: 'Seoul'"
+
+  AvailabilityZone:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.1"
+    description: "가용 영역 식별자. 특정 AZ에 한정된 청구 항목에만 적용. 글로벌·리전 서비스는 null."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#availabilityzone"
+    example: "ap-northeast-2a"
+    hbt_notes: "AWS: EC2 등 AZ 배포 리소스 / Azure/GCP: 대부분 null 또는 Zone ID"
+
+  ResourceId:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "0.5"
+    description: >
+      서비스 공급자가 부여한 리소스 고유 식별자.
+      리소스와 관련된 청구는 null이면 안 됨.
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#resourceid"
+    example: "arn:aws:ec2:ap-northeast-2:123456789012:instance/i-0abc123def456"
+    hbt_notes: "RI/SP 구매 등 리소스 미지정 청구는 null"
+
+  ResourceName:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "0.5"
+    description: "리소스의 표시 이름. ResourceId가 null이거나 표시명이 없으면 null."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#resourcename"
+    example: "i-web-001"
+    hbt_notes: "ResourceId가 존재하고 사용자가 이름을 부여한 경우 제공"
+
+  ResourceType:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "0.5"
+    description: "서비스 내 리소스의 세부 유형."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#resourcetype"
+    example: "AWS::EC2::Instance"
+    hbt_notes: "AWS CloudFormation 리소스 타입 형식 권장"
+
+  ConsumedQuantity:
+    column_type: Metric
+    feature_level: Conditional
+    data_type: Decimal
+    nullable: true
+    introduced: "1.0"
+    description: >
+      실제 소비된 SKU의 양(ConsumedUnit 기준). 가격 산정(PricingQuantity)과 다를 수 있음.
+      사용량 분석·용량 계획에 활용. v1.0에서 UsageQuantity를 대체.
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#consumedquantity"
+    replaces: "UsageQuantity (v1.0 이전)"
+    example: 720.0
+    hbt_notes: >
+      ChargeCategory='Usage', CommitmentDiscountStatus≠'Unused'일 때 필수.
+      EC2 시간: 시간(hrs) / S3 스토리지: GB / 데이터 전송: GB
+
+  ConsumedUnit:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.0"
+    description: >
+      ConsumedQuantity의 측정 단위. ConsumedQuantity가 있으면 필수.
+      v1.0에서 UsageUnit을 대체.
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#consumedunit"
+    replaces: "UsageUnit (v1.0 이전)"
+    example: "Hrs"
+    hbt_notes: "일반 단위: Hrs, GB, GB-Hrs, Requests, Units"
+
+  PricingQuantity:
+    column_type: Metric
+    feature_level: Conditional
+    data_type: Decimal
+    nullable: true
+    introduced: "1.0"
+    description: "가격 산정에 사용된 SKU 수량(PricingUnit 기준). ConsumedQuantity와 다를 수 있음."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#pricingquantity"
+    example: 720.0
+    hbt_notes: "SkuPriceId가 null이면 null. 가격 단위(PricingUnit)에 따라 측정."
+
+  PricingUnit:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.0"
+    description: "가격 산정 단위. PricingQuantity와 항상 쌍으로 존재."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#pricingunit"
+    example: "Hrs"
+    hbt_notes: "SkuPriceId가 null이면 null"
+
+  PricingCategory:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.0-preview"
+    description: "청구 행에 적용된 가격 유형(Standard, Committed, Dynamic, Other)."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#pricingcategory"
+    allowed_values:
+      Standard: "공개된 표준 가격(On-Demand)"
+      Committed: "약정 기반 가격(RI/SP 적용)"
+      Dynamic: "시장 기반 가격(Spot)"
+      Other: "기타 가격 유형"
+    example: "Standard"
+    hbt_notes: "RI 적용 EC2: Committed / On-Demand EC2: Standard / Spot: Dynamic"
+
+  ListUnitPrice:
+    column_type: Metric
+    feature_level: Conditional
+    data_type: Decimal
+    nullable: true
+    introduced: "1.0-preview"
+    description: "공개 정가(List/Rack 가격). 할인 전 단위당 가격. 절감액 계산의 기준."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#listunitprice"
+    example: 0.1920
+    hbt_notes: "SkuPriceId가 null이면 null. 단위: BillingCurrency (KRW) per PricingUnit"
+
+  ListCost:
+    column_type: Metric
+    feature_level: Conditional
+    data_type: Decimal
+    nullable: true
+    introduced: "1.0-preview"
+    description: "공개 정가 기준 총 비용(ListUnitPrice × PricingQuantity). 절감액·할인율 계산에 사용."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#listcost"
+    example: 138240.00
+    hbt_notes: "ListUnitPrice × PricingQuantity로 계산. 협상 할인·약정 할인 전 기준."
+
+  ContractedUnitPrice:
+    column_type: Metric
+    feature_level: Conditional
+    data_type: Decimal
+    nullable: true
+    introduced: "1.0-preview"
+    description: "협상된 계약 단가. 볼륨 할인·협상 할인 적용 후 단위당 가격."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#contractedunitprice"
+    example: 0.1728
+    hbt_notes: "협상 Enterprise Agreement가 없으면 ListUnitPrice와 동일"
+
+  ContractedCost:
+    column_type: Metric
+    feature_level: Conditional
+    data_type: Decimal
+    nullable: true
+    introduced: "1.0-preview"
+    description: "협상 계약 기준 총 비용. ContractedUnitPrice × PricingQuantity."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#contractedcost"
+    example: 124416.00
+    hbt_notes: "ContractedCost ≤ ListCost. ContractedCost - EffectiveCost = 약정 할인 절감액"
+
+  CommitmentDiscountId:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.0-preview"
+    description: "서비스 공급자가 부여한 약정 할인 식별자. 약정 할인 미적용 시 null."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#commitmentdiscountid"
+    example: "arn:aws:rds:ap-northeast-2:123456789012:ri:ri-2026-01-db-001"
+    hbt_notes: "AWS RI: ARN / AWS SP: Savings Plan ARN / GCP CUD: CUD ID"
+
+  CommitmentDiscountName:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.0-preview"
+    description: "약정 할인의 표시 이름. CommitmentDiscountId가 null이면 null."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#commitmentdiscountname"
+    example: "HBT-RDS-RI-2026"
+    hbt_notes: "사용자가 RI/SP에 이름을 지정한 경우 제공"
+
+  CommitmentDiscountCategory:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.0-preview"
+    description: >
+      약정 할인이 사용량(Usage) 기반인지 지출(Spend) 기반인지 구분.
+      CommitmentDiscountId가 null이면 null.
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#commitmentdiscountcategory"
+    allowed_values:
+      Usage: "미리 정해진 사용량(시간·GB 등)을 약정하는 할인 (AWS RI, GCP CUD)"
+      Spend: "미리 정해진 지출 금액을 약정하는 할인 (AWS Savings Plans)"
+    example: "Usage"
+    hbt_notes: "AWS RI: Usage / AWS Savings Plans: Spend / GCP CUD: Usage"
+
+  CommitmentDiscountType:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.0"
+    description: "약정 할인의 종류(제품 유형 명칭). CommitmentDiscountId가 null이면 null."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#commitmentdiscounttype"
+    example: "Reserved"
+    hbt_notes: "AWS RI: 'Reserved' / AWS Savings Plan: 'Savings Plan' / GCP CUD: 'Committed Use'"
+
+  CommitmentDiscountStatus:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.0"
+    description: >
+      약정 할인이 실제 사용됐는지(Used) 미사용 상태인지(Unused) 여부.
+      RI 활용률 = Used / (Used + Unused) × 100. 비율 저하 시 낭비.
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#commitmentdiscountstatus"
+    allowed_values:
+      Used: "약정이 실제 사용에 적용됨 (가치 실현)"
+      Unused: "약정이 해당 기간 미사용 (낭비)"
+      "null": "약정 할인이 적용되지 않은 일반 청구"
+    example: "Used"
+    hbt_notes: "gate-criteria.yaml: RI_UTILIZATION >= 80% 목표"
+
+  CommitmentDiscountQuantity:
+    column_type: Metric
+    feature_level: Conditional
+    data_type: Decimal
+    nullable: true
+    introduced: "1.1"
+    description: "약정 할인과 관련된 수량(CommitmentDiscountUnit 기준). 약정 분석·최적화에 활용."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#commitmentdiscountquantity"
+    example: 24.0
+    hbt_notes: "ChargeCategory='Purchase': 구매한 약정량 / 'Usage'+Used: 소비된 약정량 / 'Usage'+Unused: 미사용 약정량"
+
+  CommitmentDiscountUnit:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.1"
+    description: "CommitmentDiscountQuantity의 측정 단위. CommitmentDiscountQuantity가 있으면 필수."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#commitmentdiscountunit"
+    example: "Hrs"
+    hbt_notes: "AWS RI (EC2): Hrs / AWS RI (RDS): Hrs / GCP CUD: Hrs 또는 vCPUs"
+
+  CapacityReservationId:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.1"
+    description: "용량 예약(Capacity Reservation)의 식별자. 용량 예약 미사용 시 null."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#capacityreservationid"
+    example: "cr-0abc123def456789"
+    hbt_notes: "AWS EC2 Capacity Reservation / Azure Reserved Capacity"
+
+  CapacityReservationStatus:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.1"
+    description: "용량 예약의 사용 여부(Used/Unused). CapacityReservationId가 null이면 null."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#capacityreservationstatus"
+    allowed_values:
+      Used: "용량 예약이 실제 사용됨"
+      Unused: "용량 예약의 미사용 부분"
+    example: "Used"
+    hbt_notes: "CapacityReservationId가 있을 때만 적용"
+
+  SkuId:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.0"
+    description: "서비스 공급자가 정의한 SKU 고유 식별자. 가격 변동과 무관하게 동일 기능을 식별."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#skuid"
+    example: "AmazonEC2_BoxUsage_m5.2xlarge"
+    hbt_notes: "AWS: product_code + usage_type 조합 / Azure: MeterId / GCP: sku_id"
+
+  SkuPriceId:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: true
+    introduced: "1.0"
+    description: "특정 시점·조건의 SKU 단가 식별자. 동일 SkuId에도 가격 유형별로 다른 SkuPriceId."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#skupriceid"
+    example: "AmazonEC2_OnDemand_ap-northeast-2_m5.2xlarge"
+    hbt_notes: "단가 검증·비교·이상 탐지에 활용. SkuPriceId가 같으면 동일 단가 적용."
+
+  InvoiceIssuerName:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: String
+    nullable: false
+    introduced: "1.0"
+    description: "인보이스를 발행한 엔티티 이름. 리셀러·MSP 환경에서 CSP와 다를 수 있음."
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#invoiceissuername"
+    example: "Amazon Web Services"
+    hbt_notes: "직접 구매: CSP 이름 / 리셀러 통해 구매: 리셀러 이름"
+
+  Tags:
+    column_type: Dimension
+    feature_level: Conditional
+    data_type: JSON
+    nullable: true
+    introduced: "0.5"
+    description: >
+      리소스에 부여된 사용자 정의 태그. 키-값 쌍의 JSON 객체.
+      HBT 필수 태그 4종 포함. 태깅 커버리지 목표: 95% 이상.
+    focus_spec_ref: "https://focus.finops.org/focus-specification/v1-3/#tags"
+    example:
+      Project: "api"
+      Environment: "prod"
+      Owner: "minjun.park@hbt.co.kr"
+      CostCenter: "CC-200"
+    hbt_required_tag_keys:
+      - Project         # 허용값: web, api, data, ml
+      - Environment     # 허용값: prod, stg, dev
+      - Owner           # 담당자 이메일
+      - CostCenter      # 허용값: CC-100, CC-200, CC-300
+    hbt_notes: >
+      태그 미적용 리소스는 tag-governor 에이전트가 자동 탐지 → 72시간 내 조치 의무.
+      gate-criteria.yaml: TAGGING_COVERAGE >= 95%.
+      Azure Tags: 이중 따옴표 이스케이프 형식 주의 (README.md 참조).
+
+  # ┌─────────────────────────────────────────────────────────────────────────┐
+  # │ DEPRECATED 컬럼 — v1.3에서 폐기, 하위 호환성을 위해 정의만 유지          │
+  # └─────────────────────────────────────────────────────────────────────────┘
+
+  _deprecated:
+    ProviderName:
+      deprecated_in: "1.3"
+      replaced_by: "ServiceProviderName"
+      feature_level_was: Mandatory
+      description: "리소스·서비스를 제공하는 엔티티 이름. v1.3에서 ServiceProviderName으로 교체."
+      hbt_notes: "v1.3 이상 정규화 파이프라인에서는 ServiceProviderName 사용"
+
+    PublisherName:
+      deprecated_in: "1.3"
+      replaced_by: null
+      feature_level_was: Mandatory
+      description: "리소스·서비스를 생산한 엔티티 이름. v1.3에서 폐기. 대체 컬럼 없음."
+      hbt_notes: "ServiceProviderName으로 통합 관리"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 컬럼 요약: feature_level별 분류
+# ─────────────────────────────────────────────────────────────────────────────
+summary:
+  mandatory:
+    count: 15
+    columns:
+      - BilledCost
+      - EffectiveCost
+      - BillingAccountId
+      - BillingAccountName
+      - BillingCurrency
+      - BillingPeriodStart
+      - BillingPeriodEnd
+      - ChargePeriodStart
+      - ChargePeriodEnd
+      - ChargeCategory
+      - ChargeClass
+      - ChargeDescription
+      - ServiceCategory
+      - ServiceName
+      - ServiceProviderName
+  recommended:
+    count: 2
+    columns:
+      - ChargeFrequency
+      - ServiceSubcategory
+  conditional:
+    count: 24
+    columns:
+      - SubAccountId
+      - SubAccountName
+      - BillingAccountType
+      - SubAccountType
+      - RegionId
+      - RegionName
+      - AvailabilityZone
+      - ResourceId
+      - ResourceName
+      - ResourceType
+      - ConsumedQuantity
+      - ConsumedUnit
+      - PricingQuantity
+      - PricingUnit
+      - PricingCategory
+      - ListUnitPrice
+      - ListCost
+      - ContractedUnitPrice
+      - ContractedCost
+      - CommitmentDiscountId
+      - CommitmentDiscountName
+      - CommitmentDiscountCategory
+      - CommitmentDiscountType
+      - CommitmentDiscountStatus
+      - CommitmentDiscountQuantity
+      - CommitmentDiscountUnit
+      - CapacityReservationId
+      - CapacityReservationStatus
+      - SkuId
+      - SkuPriceId
+      - InvoiceIssuerName
+      - Tags
+  deprecated:
+    count: 2
+    columns:
+      - ProviderName
+      - PublisherName
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 정규화 파이프라인 참고 (focus-normalizer 에이전트용)
+# ─────────────────────────────────────────────────────────────────────────────
+normalization:
+  source_mappings:
+    AWS:
+      BilledCost: "line_item_unblended_cost * 1500"
+      EffectiveCost: "line_item_blended_cost * 1500"
+      BillingAccountId: "bill_payer_account_id"
+      BillingAccountName: "'hbt-prod-aws'"
+      BillingCurrency: "'KRW'"
+      BillingPeriodStart: "bill_billing_period_start_date"
+      ChargePeriodStart: "line_item_usage_start_date"
+      ChargePeriodEnd: "line_item_usage_end_date"
+      ChargeCategory: "CASE WHEN pricing_term='Reserved' THEN 'Purchase' ELSE 'Usage' END"
+      ChargeDescription: "line_item_usage_type"
+      ServiceName: "lookup(line_item_product_code)"
+      ServiceProviderName: "'Amazon Web Services'"
+      RegionId: "product_region"
+      ResourceId: "line_item_resource_id"
+      ConsumedQuantity: "line_item_usage_amount"
+      ConsumedUnit: "pricing_unit"
+      CommitmentDiscountId: "reservation_reservation_a_r_n"
+      CommitmentDiscountType: "IF(pricing_term='Reserved', 'Reserved', IF(pricing_term='SavingsPlan', 'Savings Plan', null))"
+      Tags: "JSON({Project: resource_tags_user_project, Environment: resource_tags_user_environment, Owner: resource_tags_user_owner, CostCenter: resource_tags_user_cost_center})"
+    Azure:
+      BilledCost: "CostInBillingCurrency"
+      EffectiveCost: "CostInBillingCurrency"
+      BillingAccountId: "SubscriptionId"
+      BillingAccountName: "SubscriptionName"
+      BillingCurrency: "BillingCurrency"
+      BillingPeriodStart: "BillingPeriodStartDate"
+      ChargePeriodStart: "Date"
+      ChargeCategory: "CASE ChargeType WHEN 'Usage' THEN 'Usage' WHEN 'Purchase' THEN 'Purchase' ELSE 'Adjustment' END"
+      ServiceName: "MeterCategory"
+      ServiceProviderName: "'Microsoft Azure'"
+      RegionId: "ResourceLocation"
+      SubAccountId: "ResourceGroup"
+      ResourceId: "ResourceId"
+      CommitmentDiscountId: "ReservationId"
+      Tags: "parse_json_escape(Tags)"
+    GCP:
+      BilledCost: "cost * 1500"
+      EffectiveCost: "(cost + credits_amount) * 1500"
+      BillingAccountId: "billing_account_id"
+      BillingAccountName: "project_name"
+      BillingCurrency: "'KRW'"
+      BillingPeriodStart: "invoice_month + '-01'"
+      ChargePeriodStart: "usage_start_time"
+      ChargePeriodEnd: "usage_end_time"
+      ChargeCategory: "'Usage'"
+      ServiceName: "service_description"
+      ServiceProviderName: "'Google Cloud Platform'"
+      RegionId: "location_region"
+      SubAccountId: "project_id"
+      ResourceId: "resource_global_name"
+      ResourceName: "resource_name"
+      CommitmentDiscountType: "IF(credits_type='COMMITTED_USAGE_DISCOUNT', 'Committed Use', null)"
+      Tags: "parse_json(labels)"
+  output_file: "out/focus-normalized.csv"
+  output_currency: "KRW"
+  exchange_rate: 1500
