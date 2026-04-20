@@ -1,0 +1,185 @@
+version: "1.0.0"
+source: "GCP Billing Export"
+spec_version: "1.3"
+exchange_rate: 1500
+billing_currency_out: "KRW"
+
+columns:
+  - source_column: "cost"
+    focus_column: "BilledCost"
+    transform: "multiply"
+    formula: "cost * 1500"
+    notes: "USD → KRW 변환. 소수점 2자리 반올림."
+
+  - source_column: "cost, credits_amount"
+    focus_column: "EffectiveCost"
+    transform: "multiply"
+    formula: "(cost + credits_amount) * 1500"
+    notes: "CUD 크레딧 포함 실질 비용. credits_amount는 음수 또는 0."
+
+  - source_column: "billing_account_id"
+    focus_column: "BillingAccountId"
+    transform: "direct"
+    formula: "billing_account_id"
+    notes: "GCP Billing Account ID (예: 01AB12-CD34EF-567890)."
+
+  - source_column: "project_name"
+    focus_column: "BillingAccountName"
+    transform: "direct"
+    formula: "project_name"
+    notes: "프로젝트 표시명."
+
+  - source_column: "(없음)"
+    focus_column: "BillingCurrency"
+    transform: "constant"
+    formula: "'KRW'"
+    notes: "원본 USD이나 정규화 후 KRW."
+
+  - source_column: "invoice_month"
+    focus_column: "BillingPeriodStart"
+    transform: "date_construct"
+    formula: "invoice_month + '-01T00:00:00Z'"
+    notes: "'2026-03' → '2026-03-01T00:00:00Z'."
+
+  - source_column: "(없음)"
+    focus_column: "BillingPeriodEnd"
+    transform: "constant"
+    formula: "'2026-04-01T00:00:00Z'"
+    notes: "월 기준 다음 달 1일 00:00:00Z (exclusive)."
+
+  - source_column: "usage_start_time"
+    focus_column: "ChargePeriodStart"
+    transform: "direct"
+    formula: "usage_start_time"
+    notes: "이미 ISO 8601 UTC 형식."
+
+  - source_column: "usage_end_time"
+    focus_column: "ChargePeriodEnd"
+    transform: "time_normalize"
+    formula: "IF contains(T24:00:00Z) THEN date_part + 1 day + T00:00:00Z ELSE usage_end_time"
+    notes: "T24:00:00Z → 다음날 T00:00:00Z 변환."
+
+  - source_column: "(없음)"
+    focus_column: "ChargeCategory"
+    transform: "constant"
+    formula: "'Usage'"
+    notes: "GCP Billing Export는 사용량 행만 포함."
+
+  - source_column: "(없음)"
+    focus_column: "ChargeClass"
+    transform: "constant"
+    formula: "null"
+    notes: "정상 청구 행."
+
+  - source_column: "sku_description"
+    focus_column: "ChargeDescription"
+    transform: "direct"
+    formula: "sku_description"
+    notes: "예: 'N2 Instance Core running in Korea'."
+
+  - source_column: "service_description"
+    focus_column: "ServiceName"
+    transform: "lookup"
+    formula: "lookup(service_description, gcp_service_map)"
+    notes: >
+      Compute Engine→'Compute Engine', Cloud SQL→'Cloud SQL',
+      Cloud Storage→'Cloud Storage', BigQuery→'BigQuery',
+      Vertex AI→'Vertex AI'.
+
+  - source_column: "service_description"
+    focus_column: "ServiceCategory"
+    transform: "lookup"
+    formula: "lookup(service_description, gcp_service_category_map)"
+    notes: >
+      Compute Engine→'Compute', Cloud SQL→'Databases',
+      Cloud Storage→'Storage', BigQuery→'Analytics',
+      Vertex AI→'AI and Machine Learning'.
+
+  - source_column: "(없음)"
+    focus_column: "ServiceProviderName"
+    transform: "constant"
+    formula: "'Google Cloud Platform'"
+    notes: "FOCUS v1.3 필수."
+
+  - source_column: "(없음)"
+    focus_column: "ChargeFrequency"
+    transform: "constant"
+    formula: "'Usage-Based'"
+    notes: "GCP는 사용량 기반 과금."
+
+  - source_column: "project_id"
+    focus_column: "SubAccountId"
+    transform: "direct"
+    formula: "project_id"
+    notes: "GCP 프로젝트 ID."
+
+  - source_column: "project_name"
+    focus_column: "SubAccountName"
+    transform: "direct"
+    formula: "project_name"
+    notes: "GCP 프로젝트 표시명."
+
+  - source_column: "location_region"
+    focus_column: "RegionId"
+    transform: "direct"
+    formula: "location_region"
+    notes: "asia-northeast3 등 GCP 리전 코드."
+
+  - source_column: "location_region"
+    focus_column: "RegionName"
+    transform: "lookup"
+    formula: "IF location_region='asia-northeast3' THEN 'Seoul' ELSE location_region"
+    notes: "리전 표시명 룩업."
+
+  - source_column: "resource_global_name"
+    focus_column: "ResourceId"
+    transform: "direct"
+    formula: "resource_global_name"
+    notes: "예: //compute.googleapis.com/projects/.../instances/gce-web-001. 빈값이면 null."
+
+  - source_column: "resource_name"
+    focus_column: "ResourceName"
+    transform: "direct"
+    formula: "resource_name"
+    notes: "리소스 단축명."
+
+  - source_column: "usage_amount"
+    focus_column: "ConsumedQuantity"
+    transform: "direct"
+    formula: "usage_amount"
+    notes: "실제 소비 사용량."
+
+  - source_column: "usage_unit"
+    focus_column: "ConsumedUnit"
+    transform: "direct"
+    formula: "usage_unit"
+    notes: "hours, gibibyte-months 등."
+
+  - source_column: "(없음)"
+    focus_column: "PricingCategory"
+    transform: "constant"
+    formula: "'Standard'"
+    notes: "CUD 적용 행도 Standard로 처리 (CommitmentDiscountType으로 구분)."
+
+  - source_column: "credits_type"
+    focus_column: "CommitmentDiscountType"
+    transform: "case"
+    formula: "IF credits_type='COMMITTED_USAGE_DISCOUNT' THEN 'Committed Use' ELSE null"
+    notes: "CUD 크레딧 행에만 적용."
+
+  - source_column: "labels"
+    focus_column: "Tags"
+    transform: "json_parse"
+    formula: "parse_json(labels)"
+    notes: "GCP labels JSON → FOCUS Tags."
+
+amortized_cost_logic:
+  on_demand: "AmortizedCost_KRW = EffectiveCost = (cost + credits_amount) * 1500"
+  cud: "CUD 크레딧은 credits_amount에 음수로 반영되므로 EffectiveCost에 자동 포함됨"
+
+ai_extension_columns:
+  TokenCountInput: null
+  TokenCountOutput: null
+  ModelName: "service_description='Vertex AI' 행에 'Vertex AI' 고정값 할당"
+  GpuHours: "usage_unit='hours' AND service_description='Vertex AI' AND sku에 GPU 포함 시 usage_amount 사용 가능 (샘플 미존재)"
+  GpuUtilization: "utilization-sample.csv resource_name 조인. GPU 컬럼 없으므로 null."

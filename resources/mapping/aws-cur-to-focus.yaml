@@ -1,0 +1,180 @@
+version: "1.0.0"
+source: "AWS CUR 2.0"
+spec_version: "1.3"
+exchange_rate: 1500
+billing_currency_out: "KRW"
+
+columns:
+  - source_column: "line_item_unblended_cost"
+    focus_column: "BilledCost"
+    transform: "multiply"
+    formula: "line_item_unblended_cost * 1500"
+    notes: "USD → KRW 변환. 소수점 2자리 반올림."
+
+  - source_column: "line_item_blended_cost"
+    focus_column: "EffectiveCost"
+    transform: "multiply"
+    formula: "line_item_blended_cost * 1500"
+    notes: >
+      RI/SP 선불 행이 없는 OnDemand 샘플에서는 unblended_cost와 동일.
+      RI 행 발생 시: AmortizedCost = EffectiveCost + (UpfrontFee / CommitmentPeriodHours × UsageHours).
+
+  - source_column: "bill_payer_account_id"
+    focus_column: "BillingAccountId"
+    transform: "direct"
+    formula: "bill_payer_account_id"
+    notes: "AWS 12자리 계정 ID."
+
+  - source_column: "(없음)"
+    focus_column: "BillingAccountName"
+    transform: "constant"
+    formula: "'hbt-prod-aws'"
+    notes: "소스에 계정 이름 컬럼 없음. 고정값 사용."
+
+  - source_column: "(없음)"
+    focus_column: "BillingCurrency"
+    transform: "constant"
+    formula: "'KRW'"
+    notes: "정규화 후 단일 통화 KRW."
+
+  - source_column: "bill_billing_period_start_date"
+    focus_column: "BillingPeriodStart"
+    transform: "datetime_append"
+    formula: "bill_billing_period_start_date + 'T00:00:00Z'"
+    notes: "날짜만 있는 경우 ISO 8601 UTC 형식으로 변환."
+
+  - source_column: "(없음)"
+    focus_column: "BillingPeriodEnd"
+    transform: "constant"
+    formula: "'2026-04-01T00:00:00Z'"
+    notes: "월별 청구 기준. 다음 달 1일 00:00:00Z (exclusive)."
+
+  - source_column: "line_item_usage_start_date"
+    focus_column: "ChargePeriodStart"
+    transform: "direct"
+    formula: "line_item_usage_start_date"
+    notes: "이미 ISO 8601 UTC 형식."
+
+  - source_column: "line_item_usage_end_date"
+    focus_column: "ChargePeriodEnd"
+    transform: "time_normalize"
+    formula: "IF contains(T24:00:00Z) THEN date_part + 1 day + T00:00:00Z ELSE line_item_usage_end_date"
+    notes: "AWS CUR은 일 경계를 T24:00:00Z로 표현. FOCUS는 다음날 T00:00:00Z 사용."
+
+  - source_column: "pricing_term"
+    focus_column: "ChargeCategory"
+    transform: "case"
+    formula: "CASE WHEN pricing_term='Reserved' THEN 'Purchase' ELSE 'Usage' END"
+    notes: "Reserved 선불 구매는 Purchase. OnDemand/SavingsPlan 적용 사용은 Usage."
+
+  - source_column: "(없음)"
+    focus_column: "ChargeClass"
+    transform: "constant"
+    formula: "null"
+    notes: "샘플에 이전 기간 정정 행 없음. 정상 청구는 null."
+
+  - source_column: "line_item_usage_type"
+    focus_column: "ChargeDescription"
+    transform: "direct"
+    formula: "line_item_usage_type"
+    notes: "BoxUsage:m5.2xlarge 등 사용 유형 그대로 사용."
+
+  - source_column: "line_item_product_code"
+    focus_column: "ServiceName"
+    transform: "lookup"
+    formula: "lookup(line_item_product_code, aws_service_map)"
+    notes: >
+      AmazonEC2→'Amazon EC2', AmazonRDS→'Amazon RDS', AmazonS3→'Amazon S3',
+      AWSLambda→'AWS Lambda', AmazonCloudWatch→'Amazon CloudWatch'.
+
+  - source_column: "line_item_product_code"
+    focus_column: "ServiceCategory"
+    transform: "lookup"
+    formula: "lookup(line_item_product_code, aws_service_category_map)"
+    notes: >
+      AmazonEC2→'Compute', AmazonRDS→'Databases', AmazonS3→'Storage',
+      AWSLambda→'Compute', AmazonCloudWatch→'Management and Governance'.
+
+  - source_column: "(없음)"
+    focus_column: "ServiceProviderName"
+    transform: "constant"
+    formula: "'Amazon Web Services'"
+    notes: "FOCUS v1.3 필수. ProviderName DEPRECATED 대체."
+
+  - source_column: "pricing_term"
+    focus_column: "ChargeFrequency"
+    transform: "case"
+    formula: "CASE WHEN pricing_term='Reserved' THEN 'One-Time' ELSE 'Usage-Based' END"
+    notes: "RI 선불: One-Time / OnDemand: Usage-Based."
+
+  - source_column: "product_region"
+    focus_column: "RegionId"
+    transform: "direct"
+    formula: "product_region"
+    notes: "ap-northeast-2 등 AWS 리전 코드."
+
+  - source_column: "product_region"
+    focus_column: "RegionName"
+    transform: "lookup"
+    formula: "IF product_region='ap-northeast-2' THEN 'Asia Pacific (Seoul)' ELSE product_region"
+    notes: "리전 표시명 룩업."
+
+  - source_column: "line_item_resource_id"
+    focus_column: "ResourceId"
+    transform: "direct"
+    formula: "line_item_resource_id"
+    notes: "EC2 인스턴스 ID(i-xxx), ARN 등. 빈값이면 null."
+
+  - source_column: "line_item_resource_id"
+    focus_column: "ResourceName"
+    transform: "direct"
+    formula: "line_item_resource_id"
+    notes: "ResourceId와 동일 (별도 Name 태그 없는 경우)."
+
+  - source_column: "line_item_usage_amount"
+    focus_column: "ConsumedQuantity"
+    transform: "direct"
+    formula: "line_item_usage_amount"
+    notes: "실제 소비 사용량."
+
+  - source_column: "pricing_unit"
+    focus_column: "ConsumedUnit"
+    transform: "direct"
+    formula: "pricing_unit"
+    notes: "Hrs, GB 등."
+
+  - source_column: "pricing_term"
+    focus_column: "PricingCategory"
+    transform: "case"
+    formula: "CASE WHEN pricing_term='Reserved' THEN 'Committed' WHEN pricing_term='Spot' THEN 'Dynamic' ELSE 'Standard' END"
+    notes: "OnDemand→Standard, Reserved→Committed, Spot→Dynamic."
+
+  - source_column: "reservation_reservation_a_r_n"
+    focus_column: "CommitmentDiscountId"
+    transform: "null_if_empty"
+    formula: "IF reservation_reservation_a_r_n != '' THEN reservation_reservation_a_r_n ELSE null"
+    notes: "RI ARN. 빈값이면 null."
+
+  - source_column: "(없음)"
+    focus_column: "CommitmentDiscountType"
+    transform: "case"
+    formula: "IF pricing_term='Reserved' THEN 'Reserved' ELSE null"
+    notes: "RI: 'Reserved' / SP: 'Savings Plan' / 없음: null."
+
+  - source_column: "resource_tags_user_*"
+    focus_column: "Tags"
+    transform: "json_build"
+    formula: "JSON({Project: resource_tags_user_project, Environment: resource_tags_user_environment, Owner: resource_tags_user_owner, CostCenter: resource_tags_user_cost_center})"
+    notes: "4개 태그 컬럼을 JSON 객체로 조합. 빈값 키는 제외."
+
+amortized_cost_logic:
+  on_demand: "AmortizedCost_KRW = EffectiveCost (DiscountRate=0)"
+  reserved_all_upfront: "AmortizedCost_KRW = EffectiveCost + (UpfrontFee / CommitmentPeriodHours * UsageHours)"
+  reserved_no_upfront: "AmortizedCost_KRW = EffectiveCost"
+
+ai_extension_columns:
+  TokenCountInput: null
+  TokenCountOutput: null
+  ModelName: null
+  GpuHours: null
+  GpuUtilization: "utilization-sample.csv ResourceId+date 조인. 샘플에 GPU 컬럼 없으므로 null."

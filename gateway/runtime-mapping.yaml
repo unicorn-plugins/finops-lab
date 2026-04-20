@@ -10,7 +10,12 @@ tier_mapping:
     MEDIUM:
       model: "claude-sonnet-4-6"
     LOW:
-      model: "claude-haiku-4-5"
+      model: "claude-haiku-4-5-20251001"
+
+  # 에이전트별 명시적 오버라이드 (가독성 목적 — default와 동일 모델 사용)
+  pptx-spec-writer:
+    MEDIUM:
+      model: "claude-sonnet-4-6"   # 경영진·교육 PPT 명세 설계 품질 확보
 
 tool_mapping:
   # ── 이미지 생성 ── (@ppt-writer 슬라이드 일러스트)

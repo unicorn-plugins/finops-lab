@@ -1,6 +1,7 @@
 # finops 플러그인 — 설치 매니페스트
 # 코어 4단계(@why-finops → @inform → @optimize → @operate → @review)는 외부 의존성 0
 # @ppt-writer 이미지 생성 시에만 generate_image(Python+Gemini) 필요
+# @ppt-writer .pptx 빌드에 DMAP Office 빌더 런타임(pptxgenjs, Node.js ≥18) 필수
 
 mcp_servers: []
 
@@ -11,3 +12,16 @@ custom_tools:
     description: "Gemini(Nano Banana) 기반 교육용 이미지 생성 — @ppt-writer 슬라이드 일러스트"
     source: tools/generate_image.py
     required: false
+
+# DMAP Office 빌더 런타임 의존성
+#   - PPT: pptxgenjs (node) — pptx-spec-writer 명세 → build.js → .pptx
+# setup 스킬이 각 entry의 check 명령으로 설치 여부 확인 후 install 제안
+# 설치 위치: 플러그인 루트(finops-lab/node_modules/) — Node 모듈 해석 경로가
+#   빌드 실행 CWD(out/ppt-scripts/{대상}-build.js)에서 상위로 탐색하므로 루트 설치 필수
+runtime_dependencies:
+  - name: pptxgenjs
+    description: "PPT 빌드용 Node.js 라이브러리 — skills/ppt-writer가 build.js 직접 실행"
+    runtime: node                             # 사전 요구: node ≥ 18
+    install: "npm install pptxgenjs"
+    check: "node -e \"require('pptxgenjs')\""
+    required: true

@@ -20,7 +20,7 @@ DMAP(Declarative Multi-Agent Plugin) 표준 플러그인.
 | `@optimize` | Right-sizing & 약정 전략 | `out/rightsize-plan.md` + `out/commit-strategy.md` (RI/SP/Spot 3시나리오) |
 | `@operate` | KPI · 자동화 · 리뷰 런북 | `out/review-runbook.md` + KPI 6종 + 게이트 6종 |
 | `@review` | 최종 독립 검증 | `out/review-report.md` (판정 APPROVED/REJECTED) |
-| `@ppt-writer` | PPT Deck + 실제 .pptx 제작 | `out/ppt-scripts/*-deck.pptx` (anthropic-skills:pptx 빌드) |
+| `@ppt-writer` | PPT Deck + 실제 .pptx 제작 | `out/ppt-scripts/*-deck.pptx` (DMAP 2단계: pptx-spec-writer → pptxgenjs build.js 직접 실행) |
 | `@core` | 풀 파이프라인 | 위 5개 순차 실행 (ppt-writer 제외) |
 
 ### 하이라이트
@@ -28,7 +28,7 @@ DMAP(Declarative Multi-Agent Plugin) 표준 플러그인.
 - **FOCUS v1.3 + AI 확장 5종**: TokenCountInput/Output · ModelName · GpuHours · GpuUtilization
 - **FinOps for AI**: LLM 토큰·GPU 특화 메트릭 + 단위경제 KPI(토큰 1M당·추론 1K당·GPU 시간당)
 - **인터랙티브 대시보드**: 단일 HTML 파일(<1.2MB, Chart.js 4.x CDN, 9차트, 오프라인 열람)
-- **PPT 제작**: Claude 공식 `anthropic-skills:pptx` 위임으로 외부 런타임 불필요
+- **PPT 제작**: DMAP 표준 2단계 패턴 — `pptx-spec-writer` 명세 + `pptxgenjs` 직접 빌드 (Node.js ≥18 필요)
 - **증거 기반**: 모든 권고가 COVERS 규칙 ID(`COVERS-*-##`)·게이트 항목으로 역참조 가능
 
 ---
@@ -61,6 +61,10 @@ claude plugin install finops@finops
 - `generate_image` 도구 설치 여부 질의 (선택):
   - 설치 시: `pip install python-dotenv google-genai` + `.env` 생성 + `GEMINI_API_KEY` 입력
   - 스킵 시: `@ppt-writer`에서 텍스트 슬라이드로 제작
+- **DMAP Office 빌더 런타임 설치 (필수)**:
+  - `pptxgenjs` (Node.js ≥18) — 플러그인 루트(`finops-lab/`)에 설치
+  - `node -e "require('pptxgenjs')"` 성공 여부 자동 검증
+  - 미설치 시 `npm install pptxgenjs` 제안 및 실행
 - 라우팅 테이블 등록 (`~/.claude/CLAUDE.md` 또는 프로젝트 `CLAUDE.md`)
 
 ### 3. (선택) DMAP 플러그인 디렉토리 접근 권한 설정
@@ -158,10 +162,11 @@ out/
 ├── commit-strategy.md             # RI/SP/Spot 3시나리오 (Conservative/Base/Optimistic)
 ├── review-runbook.md              # 주/월/분기 리뷰 런북 + 게이트 6종
 ├── review-report.md               # 독립 검증 리포트 (판정 APPROVED/REJECTED)
-└── ppt-scripts/                   # @ppt-writer 산출물
+└── ppt-scripts/                   # @ppt-writer 산출물 (DMAP 2단계 빌드)
     ├── index.md                   # 선별 결과
     ├── images/                    # Gemini 생성 일러스트 (선택)
-    ├── {대상}-deck.md             # Marp deck md
+    ├── {대상}-spec.md             # pptx-spec-writer 명세 (패턴 A~F)
+    ├── {대상}-build.js            # pptxgenjs 빌드 스크립트 (skills/ppt-writer 직접 작성)
     └── {대상}-deck.pptx           # 최종 PowerPoint 파일
 ```
 
@@ -171,12 +176,23 @@ out/
 
 ### 런타임
 
-- Claude Code / Claude CoWork / Claude.ai (Anthropic 공식 Agent Skills 지원 환경)
+- Claude Code / Claude CoWork / Claude.ai
 - DMAP 빌더 표준 지원 런타임
+- Node.js ≥ 18 (`@ppt-writer` .pptx 빌드용 — 필수)
+- Python ≥ 3.9 (`@ppt-writer` 이미지 생성 시 — 선택)
 
 ### MCP/LSP 서버
 
 - **없음** — Claude Code 빌트인 + OMC 기본 제공으로 완결
+
+### DMAP Office 빌더 런타임 (필수 — `/finops:setup`이 자동 설치)
+
+| 항목 | 용도 | 설치 | 설치 위치 |
+|------|------|------|----------|
+| Node.js ≥ 18 | `pptxgenjs` 실행 환경 | https://nodejs.org/ | 시스템 |
+| `pptxgenjs` | `.pptx` 빌드 (spec.md → build.js) | `npm install pptxgenjs` | **플러그인 루트** (`finops-lab/node_modules/`) |
+
+> `pptxgenjs`는 반드시 **플러그인 루트**에 설치함. `gateway/`는 `out/`과 형제라 Node 모듈 해석 경로에 포함되지 않음.
 
 ### 외부 의존성 (선택 — `@ppt-writer` 이미지 생성 시만)
 
@@ -187,7 +203,7 @@ out/
 | `google-genai` | Gemini Nano Banana API | `pip install google-genai` |
 | `GEMINI_API_KEY` | Gemini API 접근 | https://ai.google.dev/ |
 
-> 이미지 없는 텍스트 슬라이드만 생성할 경우 의존성 **0**. `.pptx` 바이너리 빌드는 `anthropic-skills:pptx`(Claude 내장)에 Skill→Skill 위임으로 수행.
+> 이미지 없는 텍스트 슬라이드만 생성할 경우 Python 의존성은 **0**. `.pptx` 바이너리 빌드는 `skills/ppt-writer`가 `pptxgenjs`로 `build.js`를 직접 실행 (외부 스킬 위임 없음).
 
 ### 샘플 데이터 (플러그인 내장)
 
@@ -216,19 +232,19 @@ out/
 Skills (Controller+UseCase)       Agents (Service)                Gateway (Infrastructure)
 ────────────────────────────      ────────────────────            ──────────────────────
 setup (Setup)                     strategy-director    HIGH       install.yaml
-help (Utility)                    focus-normalizer     MEDIUM     runtime-mapping.yaml
-why-finops (Orchestrator)  ─────▶ cost-analyst         MEDIUM     tools/
-inform (Orchestrator)             tag-governor         LOW        └─ generate_image.py
-optimize (Orchestrator)           rightsize-advisor    MEDIUM
-operate (Orchestrator)            commit-planner       HIGH       + (Skill→Skill)
-review (Orchestrator)             finops-practitioner  MEDIUM       anthropic-skills:pptx
-ppt-writer (Orchestrator)         reviewer             HIGH         (Claude 공식)
-core (Orchestrator, 파이프라인)   ppt-writer           MEDIUM
+help (Utility)                    focus-normalizer     MEDIUM       └─ runtime_dependencies
+why-finops (Orchestrator)  ─────▶ cost-analyst         MEDIUM         └─ pptxgenjs (Node)
+inform (Orchestrator)             tag-governor         LOW        runtime-mapping.yaml
+optimize (Orchestrator)           rightsize-advisor    MEDIUM     tools/
+operate (Orchestrator)            commit-planner       HIGH        └─ generate_image.py
+review (Orchestrator)             finops-practitioner  MEDIUM
+ppt-writer (Orchestrator)  ─────▶ pptx-spec-writer     MEDIUM     플러그인 루트:
+core (Orchestrator, 파이프라인)   reviewer             HIGH        └─ node_modules/pptxgenjs
 ```
 
 - **스킬 9종** + **에이전트 9종** + **Gateway 1세트** + **commands 9개 진입점**
 - 에이전트 간 직접 호출 없음 — 스킬이 순차 오케스트레이션
-- `.pptx` 바이너리 빌드는 스킬이 `anthropic-skills:pptx`로 Skill→Skill 위임
+- `.pptx` 바이너리 빌드는 `skills/ppt-writer`가 `pptxgenjs` `build.js`를 **직접 작성·실행** (외부 스킬 위임 없음, DMAP 2단계 패턴)
 
 ---
 

@@ -57,7 +57,7 @@ FinOps 실무 전문가
 PPT Deck 작성 전문가
 - 프로파일: 장슬라이드/덱메이커/여성/34
 - 성향: DMAP ppt-guide를 엄격히 준수하는 디자인 규율형 — 3~5 불릿 압축 정보설계 감각
-- 경력: 교육 PPT 디자인 6년. Marp·pptx·Anthropic Agent Skills 활용 능숙
+- 경력: 교육 PPT 디자인 6년. Marp·DMAP Office 빌더(pptxgenjs) 활용 능숙
 ```
 
 ## 대화 가이드
@@ -129,7 +129,7 @@ PPT Deck 작성 전문가
 - `@optimize`: 줄이기 — 유휴 리소스 탐지, Right-sizing 3대안(CSP+AI), GPU 활용, 모델 다운그레이드, RI/SP/Spot 3시나리오
 - `@operate`: 체계화 — 단위경제 KPI 6종, 자동화 5단계, 게이트 6종, 주/월/분기 리뷰 런북, Crawl→Walk 12개월 전환
 - `@review`: 최종 독립 검증 — 4단계 정합성, FOCUS 커버리지, COVERS·게이트 규칙 ID 역참조, 3시나리오 수치 일관성, Ownership 전환 실행 가능성
-- `@ppt-writer`: PPT Deck 작성 + 실제 .pptx 제작 — 산출물 선별 → Marp deck md → anthropic-skills:pptx로 .pptx 빌드 (post-hoc)
+- `@ppt-writer`: PPT Deck 작성 + 실제 .pptx 제작 — 산출물 선별 → pptx-spec-writer 에이전트가 산출물당 1 spec.md 작성 → skills/ppt-writer가 pptxgenjs build.js 직접 실행하여 각 .pptx 빌드 (post-hoc · DMAP 2단계 패턴)
 - `@core`: finops 풀 파이프라인 — @why-finops → @inform → @optimize → @operate → @review 순차 실행 (ppt-writer는 post-hoc로 별도 호출)
 
 ## 플러그인 변수

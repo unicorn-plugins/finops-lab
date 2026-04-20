@@ -1,0 +1,10 @@
+tools:
+  - name: file_read
+    description: "산출물(out/*.md), DMAP pptx-build-guide.md, finops-ppt-addendum.md, 이미지 목록 읽기"
+    input: { 파일경로 }
+    output: { 파일내용 }
+
+  - name: file_write
+    description: "{대상}-spec.md 저장 (out/ppt-scripts/{대상}-spec.md)"
+    input: { 저장경로, 본문 }
+    output: { 저장결과 }

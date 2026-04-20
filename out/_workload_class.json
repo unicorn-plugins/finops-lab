@@ -1,0 +1,54 @@
+{
+  "total": 42256382.25000001,
+  "classification": {
+    "상시": {
+      "count": 63,
+      "cost": 38497812.0,
+      "csps": {
+        "Amazon Web Services": 7202943.0,
+        "Microsoft Azure": 27911250.0,
+        "Google Cloud Platform": 3383619.0
+      }
+    },
+    "변동": {
+      "count": 12,
+      "cost": 3100865.85,
+      "csps": {
+        "Amazon Web Services": 594000.0,
+        "Microsoft Azure": 1860000.0,
+        "Google Cloud Platform": 451395.0,
+        "OpenAI": 187564.2,
+        "Anthropic": 7906.65
+      }
+    },
+    "예측불가": {
+      "count": 2,
+      "cost": 600704.4,
+      "csps": {
+        "Anthropic": 396040.5,
+        "OpenAI": 204663.9
+      }
+    },
+    "배치": {
+      "count": 0,
+      "cost": 0.0,
+      "csps": {}
+    }
+  },
+  "csp_total": {
+    "Amazon Web Services": 7833243.0,
+    "Microsoft Azure": 29771250.0,
+    "Google Cloud Platform": 3855714.0,
+    "Anthropic": 403947.15,
+    "OpenAI": 392228.10000000003
+  },
+  "service_total": {
+    "Compute": 29880954.0,
+    "Databases": 4754358.0,
+    "Storage": 680100.0,
+    "Management and Governance": 344400.0,
+    "Web": 5745000.0,
+    "Analytics": 7875.0,
+    "AI and Machine Learning": 843695.2499999998
+  }
+}

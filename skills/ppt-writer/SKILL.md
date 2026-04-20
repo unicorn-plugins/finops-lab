@@ -1,6 +1,6 @@
 ---
 name: ppt-writer
-description: "PPT Deck 작성 + 실제 .pptx 제작 — 산출물 선별 → Marp deck md → anthropic-skills:pptx로 .pptx 빌드 (post-hoc)"
+description: "DMAP 표준 2단계 PPT 빌드 오케스트레이션 — N 산출물을 pptx-spec-writer로 명세 작성 후 pptxgenjs build.js를 직접 실행하여 각 .pptx 생성 (다중 deck 루프)"
 type: orchestrator
 user-invocable: true
 ---
@@ -11,7 +11,16 @@ user-invocable: true
 
 ## 목표
 
-FinOps 파이프라인 산출물을 선별하여 Marp deck md를 작성하고, `anthropic-skills:pptx`를 통해 실제 `.pptx` 바이너리 파일을 생성함. 교육용·발표용 고품질 PowerPoint 덱을 자동으로 산출함.
+FinOps 파이프라인 산출물을 선별하여 **DMAP 표준 2단계 PPT 빌드 패턴**으로 다중 `.pptx`를 생성함:
+- **Phase 1**: orchestrator가 직접 산출물 선별 + (선택) 이미지 생성
+- **Phase 2**: `pptx-spec-writer` 에이전트가 산출물당 1 `spec.md` 작성 (N회 루프)
+- **Phase 3**: orchestrator가 `pptxgenjs`로 `build.js`를 직접 작성·실행 (N회 루프, 각 deck.pptx 생성)
+- **Phase 4**: 자가 검증 + 사용자 보고
+
+**DMAP 표준 Office 빌드 패턴 준수**:
+- PPT: 2단계(Spec Agent + Orchestrator Builder) — `{DMAP_PLUGIN_DIR}/resources/guides/office/pptx-build-guide.md`
+- 외부 변환 스킬(`anthropic-skills:pptx` 등) **의존 제거**
+- Marp deck md 산출 **폐기** — `spec.md`가 유일한 중간 산출물
 
 ## 활성화 조건
 
@@ -22,164 +31,190 @@ FinOps 파이프라인 산출물을 선별하여 Marp deck md를 작성하고, `
 
 ## 에이전트 호출 규칙
 
-### FQN 테이블
+### 에이전트 FQN
 
-| 에이전트/스킬 | FQN | 티어 |
-|---|---|---|
-| ppt-writer | `finops:ppt-writer:ppt-writer` | MEDIUM |
-| pptx 빌드 스킬 | `anthropic-skills:pptx` | 외부 스킬 |
+| 에이전트 | FQN | 티어 | 담당 |
+|----------|-----|------|------|
+| pptx-spec-writer | `finops:pptx-spec-writer:pptx-spec-writer` | MEDIUM | Phase 2 (산출물당 1 spec 작성, N회 루프) |
 
-### 프롬프트 조립 지시 (Agent 위임)
+### 프롬프트 조립
+- `agents/pptx-spec-writer/`의 `AGENT.md` + `agentcard.yaml` + `tools.yaml` 3파일을 합쳐 단일 프롬프트로 조립
+- `gateway/runtime-mapping.yaml`의 `pptx-spec-writer.MEDIUM` 모델 매핑 참조
+- 호출:
+  ```
+  Agent(
+    subagent_type="finops:pptx-spec-writer:pptx-spec-writer",
+    model=MEDIUM 티어 모델,
+    prompt=조립된 프롬프트
+  )
+  ```
 
-호출 전 다음 순서로 프롬프트를 조립함 (combine-prompt.md 규약):
-1. `agents/ppt-writer/AGENT.md` 전문 로드
-2. `agents/ppt-writer/agentcard.yaml` 역량·제약·핸드오프 섹션 로드
-3. Phase 1/2 TASK·EXPECTED OUTCOME·MUST DO·MUST NOT DO·CONTEXT를 조합하여 단일 프롬프트 완성
+### PPT 빌드는 위임 없이 오케스트레이터가 직접 수행
 
-### 호출 (Agent)
-
-```
-Agent(
-  subagent_type="finops:ppt-writer:ppt-writer",
-  model=MEDIUM 티어 모델,
-  prompt=조립된 프롬프트
-)
-```
-
-### 호출 (Skill→Skill 위임)
-
-```
-Skill(
-  skill="anthropic-skills:pptx",
-  args={...}
-)
-```
+- DMAP 2단계 패턴 Phase 3은 orchestrator가 pptxgenjs `build.js`를 Write + Bash로 직접 작성·실행
+- `anthropic-skills:pptx`에 Skill→Skill 위임 **금지**
+- spec.md → build.js 변환 로직은 본 스킬이 DMAP pptx-build-guide.md 6절 11항을 필독 후 직접 작성
 
 ## 워크플로우
 
-### Phase 0: 선행 확인 & 이미지 모드 문의 (`ulw` 활용)
+### Phase 0: 선행 확인 & 옵션 수집 (`ulw` 활용)
 
-다음 항목을 순서대로 확인함:
-- `out/` 디렉토리에 PPT 선별 가능한 산출물 최소 2종 존재 확인
+다음 항목을 순서대로 확인:
+- `out/` 디렉토리에 PPT 선별 가능한 산출물 **최소 2종 존재** 확인
   - 미존재 시 `/finops:core` 선행 실행 안내 후 중단
-- `gateway/tools/.env` 존재 여부 확인 → `GEMINI_API_KEY` 유효 여부 간단 체크
+- `gateway/tools/.env` 존재 여부 확인 → `GEMINI_API_KEY` 유효성 체크
+- **`pptxgenjs` 설치 확인**: Bash `cd out && node -e "require('pptxgenjs')"` 실행
+  - 실패 시 `/finops:setup` 재실행 안내 후 중단 (runtime_dependencies 설치 필요)
 
-AskUserQuestion으로 이미지 포함 여부를 질의함:
+AskUserQuestion으로 이미지 포함 여부를 질의:
 - "이미지 포함 (Gemini 호출)" — `GEMINI_API_KEY` 존재 시에만 선택지 제공
 - "텍스트만 (이미지 스킵)" — 항상 제공
 
-### Phase 1: 대상 선별 & 이미지 생성 → Agent: ppt-writer (`/oh-my-claudecode:ralph` 활용)
+### Phase 1: 산출물 선별 + (선택) 이미지 생성 (오케스트레이터 직접 수행 — `ulw` 활용)
 
-→ Agent: ppt-writer
+**외부 에이전트 위임 없이 orchestrator가 직접 수행**:
 
-- **TASK**: `artifact-selector` sub_role로 PPT 적합 산출물을 선별하고, 이미지 모드인 경우 `image-renderer` sub_role로 교육용 일러스트 이미지를 생성함
-- **EXPECTED OUTCOME**:
-  - `out/ppt-scripts/index.md` — 선별 대상 목록 + 선정 근거 + 예상 슬라이드 수
-  - (이미지 모드 시) `out/ppt-scripts/images/*.png` — 각 산출물 대응 교육용 일러스트
-  - (이미지 모드 시) `out/ppt-scripts/images/index.md` — 이미지 목록 + 각 사용 위치
+1. **산출물 선별**: Read + Glob로 `out/**/*.md` 스캔
+   - 평가 후보: `why-statement`, `maturity-diagnosis`, `rightsize-plan`, `commit-strategy`,
+     `review-runbook`, `maturity-transition`, `review-report` 등
+   - 선정 기준: 경영진·의사결정·교육 관점 중요도, 시각화 적합성, 슬라이드 밀도
+   - **선별 결과**를 `out/ppt-scripts/index.md`에 저장 — 대상 목록 + 선정 근거 + 예상 슬라이드 수
+2. **이미지 생성 (이미지 모드 시)**: `generate_image` 커스텀 도구 직접 호출
+   - 각 산출물 핵심 개념에 대해 `finops-ppt-addendum.md §6`의 파일명 규칙 준수
+   - 교육용 일러스트 스타일(§7) 프롬프트 적용
+   - 산출: `out/ppt-scripts/images/{finops_*}.png` + `out/ppt-scripts/images/index.md` (이미지↔슬라이드 매핑)
+3. **이미지 스킵 모드**: `out/ppt-scripts/index.md`에 "이미지 모드: 스킵" 명기
+
+### Phase 2: Spec 작성 → Agent: pptx-spec-writer (산출물당 1회 루프, `ulw` 활용)
+
+Phase 1에서 선별된 산출물 N건 각각에 대해 pptx-spec-writer 에이전트에 **루프 위임**:
+
+- **TASK**: 산출물 1건을 분석하여 PPT 시각 명세(`{대상}-spec.md`) 작성
+- **EXPECTED OUTCOME**: `out/ppt-scripts/{대상}-spec.md` (패턴 A~F 매핑 + 이미지 참조)
 - **MUST DO**:
-  - 교육용 일러스트 스타일(흰 배경·깔끔한 선·전문적·텍스트 최소) 준수
-  - 이미지 스킵 모드 선택 시 `out/ppt-scripts/index.md`에 "이미지 모드: 스킵" 명기
-  - 선별 기준(중요도·시각화 적합성·슬라이드 밀도) 근거 기술
-- **MUST NOT DO**:
-  - Marp deck md 작성 금지 (Phase 2 전담)
-  - 이미지 생성 시 저작권·개인정보 포함 요소 삽입 금지
-- **CONTEXT**:
-  - `out/*` 하위 전체 산출물
-  - `agents/ppt-writer/references/ppt-guide.md`
+  - `{DMAP_PLUGIN_DIR}/resources/guides/office/pptx-build-guide.md` 1~5절 필독
+  - `{PLUGIN_DIR}/agents/pptx-spec-writer/references/finops-ppt-addendum.md` 필독 (산출물별 표준 흐름 §1)
+  - 슬라이드당 본문 ≤7줄, 이미지는 `![설명](images/파일명.png)` 형식
+  - 모든 수치에 범위·출처 명시 (addendum §3·§4)
+- **MUST NOT DO**: 실제 PPT 파일 생성 금지, 컬러·폰트 직접 지정 금지, 단일 숫자 수치 표기 금지
+- **CONTEXT (산출물별 다름)**: 해당 `out/{대상}.md` 경로, 이미지 목록, 목표 슬라이드 수, 대상 청중
 
-### Phase 2: Marp deck md 작성 → Agent: ppt-writer (`/oh-my-claudecode:ralph` 활용)
+루프 완료 후 N개 `{대상}-spec.md` 존재 확인.
 
-→ Agent: ppt-writer
+### Phase 3: PPT 파일 빌드 (오케스트레이터 직접 수행, 산출물당 1회 루프 — `ulw` 활용)
 
-- **TASK**: `slide-designer` sub_role로 Phase 1에서 선별된 각 대상에 대해 Marp deck md를 작성함
-- **EXPECTED OUTCOME**:
-  - `out/ppt-scripts/{대상}-deck.md` (선별 대상 수만큼, 각 10~20슬라이드)
-    - 구조: 표지 / 목차 / 본문 / 요약 섹션 포함
-    - DMAP ppt-guide 준수 `style:` frontmatter CSS 포함
-    - 이미지 모드 시 `images/*.png` 상대 경로 임베딩
-    - 발표자 노트 HTML 주석(`<!-- -->`) 포함
-- **MUST DO**:
-  - 최소 12pt 폰트, 1152×648pt 슬라이드 크기, Pretendard 폰트 지정
-  - 컬러 팔레트 HEX(`#2C2926`, `#059669`, `#0D9488`, `#505060`)를 `style` frontmatter CSS로 기술
-  - `---` 구분자로 슬라이드 경계 명확히 표시
-  - 각 슬라이드에 발표자 노트(HTML 주석) 작성
-- **MUST NOT DO**:
-  - 직접 `.pptx` 빌드 시도 금지 (Phase 3 스킬 담당)
-  - 12pt 미만 폰트 사용 금지
-  - 이미지 모드 스킵 시 `images/` 경로 참조 금지
-- **CONTEXT**:
-  - Phase 1 산출물 (`out/ppt-scripts/index.md`, `out/ppt-scripts/images/`)
-  - `agents/ppt-writer/references/ppt-guide.md`
+**외부 스킬 위임 없이 orchestrator가 직접 수행** (산출물 N건 각각):
 
-### Phase 3: .pptx 빌드 → Skill: anthropic-skills:pptx (Skill→Skill 위임, deck별 반복)
-
-→ Skill: anthropic-skills:pptx
-
-Phase 2에서 생성된 Marp deck md 목록을 루프 돌며 각각 위임함.
-
-- **INTENT**: Phase 2에서 생성된 Marp deck md를 PowerPoint 바이너리(`.pptx`)로 변환. DMAP ppt-guide 스타일(최소 12pt, 1152×648, Pretendard, 컬러 팔레트)을 반영하여 생성
-- **ARGS**:
-  ```json
-  {
-    "source_plugin": "finops",
-    "source_deck_path": "out/ppt-scripts/{대상}-deck.md",
-    "output_pptx_path": "out/ppt-scripts/{대상}-deck.pptx",
-    "style_spec": "Marp frontmatter의 style 블록 준수 — 최소 12pt, Pretendard, 1152×648pt, 컬러 팔레트(#2C2926·#059669·#0D9488·#505060), 이미지는 images/ 상대 경로 사용"
-  }
-  ```
-- **RETURN**: 각 deck의 `.pptx` 파일이 `output_pptx_path`에 존재. 슬라이드 수가 deck md의 `---` 구분 수와 일치
+1. **가이드 로드** (루프 외부, 1회만): `{DMAP_PLUGIN_DIR}/resources/guides/office/pptx-build-guide.md` 전체 읽기
+   (특히 6절 "코드 생성 시 필수 검증 규칙" 11항 모두 준수)
+2. **각 산출물에 대해** (루프):
+   a. `out/ppt-scripts/{대상}-spec.md` 읽고 슬라이드별 패턴(A~F) 매핑
+   b. **빌드 코드 작성**: Write 도구로 `out/ppt-scripts/{대상}-build.js` 생성
+      - pptxgenjs 사용
+      - **반드시 가이드 6절 전체 규칙 준수**:
+        - `pptx.shapes.RECTANGLE`/`ROUNDED_RECTANGLE` 사용 (`ShapeType` 금지)
+        - `defineLayout({name:"CUSTOM", width:16, height:9})`
+        - `async function createSlideXX(pptx)` 패턴
+        - `slide.addTable()` 사용 (수동 셀 그리기 금지)
+        - `fs12()` 헬퍼로 12pt 미만 폰트 차단
+        - 이미지 임베딩 전 경로·크기 검증
+        - Pretendard 폰트 통일
+        - `main().catch(e => { console.error(...); process.exit(1); })` 진입점
+   c. **빌드 실행**: Bash로 `cd out/ppt-scripts && node {대상}-build.js` 실행
+      → `out/ppt-scripts/{대상}-deck.pptx` 생성
+      - 전제: `pptxgenjs`가 **플러그인 루트**(`finops-lab/node_modules/`)에 설치됨
+        (Node 해석 경로: `out/ppt-scripts → out → finops-lab/node_modules` ✓)
+      - `Cannot find module 'pptxgenjs'` 발생 시 `/finops:setup` 재실행하여 플러그인 루트에 설치
+   d. **검증**:
+      - 빌드 종료 코드 0 확인
+      - `.pptx` 파일 존재 및 0바이트 초과 확인
+      - 자가 검증 체크리스트 11항 통과
+      - 실패 시 에러 분석 → 코드 수정 → 재실행 (해당 deck만 최대 3회)
+3. **루프 집계**: 성공 deck / 실패 deck을 리스트로 분리 수집
 
 ### Phase 4: 자가 검증 & 사용자 보고 (`/oh-my-claudecode:verify` 활용)
 
-다음 항목을 순서대로 검증함:
-- [ ] 각 `{대상}-deck.pptx` 파일 존재 확인
-- [ ] 각 `.pptx` 파일 크기 > 10KB (빈 파일 아님) 확인 (Glob으로 파일 크기 확인)
-- [ ] 슬라이드 수가 deck md의 `---` 구분 수와 일치하는지 확인 (텍스트 역추출 가능 시)
-- [ ] 생성 실패 deck 발견 시 재시도 또는 사용자에게 원인 보고
+루프 전체에 대해 다음 항목을 검증:
+- [ ] 각 `{대상}-spec.md` 파일 존재 (Phase 2 결과)
+- [ ] 각 `{대상}-build.js` 파일 존재 (Phase 3 결과)
+- [ ] 각 `{대상}-deck.pptx` 파일 존재 및 크기 > 10KB
+- [ ] 슬라이드 수가 spec md의 `## 슬라이드 N:` 항목 수와 일치
+- [ ] 이미지 모드 시 `images/*.png` 파일이 실제 존재 (참조된 항목)
+- [ ] 빌드 실패 deck 리스트 비어있음 (또는 사용자에게 원인 보고)
 
-완료 시 생성된 `.pptx` 파일 목록과 경로를 사용자에게 안내함.
+완료 시 생성된 `.pptx` 파일 목록·경로·크기·슬라이드 수를 표로 안내.
 
 ## 완료 조건
 
-- [ ] 대상 선별 결과 (`out/ppt-scripts/index.md`) 존재
-- [ ] Marp deck md 다수 생성 (선별 대상 수만큼)
-- [ ] 동일 수의 `.pptx` 파일 생성
+- [ ] 선별 결과(`out/ppt-scripts/index.md`) 존재
+- [ ] N개 `{대상}-spec.md` 생성 (Phase 2)
+- [ ] N개 `{대상}-build.js` 생성 (Phase 3)
+- [ ] 동일 수의 `{대상}-deck.pptx` 생성 (Phase 3)
 - [ ] 이미지 모드 시 `out/ppt-scripts/images/` 디렉토리 및 `index.md` 존재
-- [ ] 각 `.pptx` 파일 크기 > 10KB (빈 파일 아님)
+- [ ] 각 `.pptx` 크기 > 10KB
 
 ## 검증 프로토콜
 
-1. ppt-writer AGENT.md의 검증 섹션 체크박스 전항목 통과
-2. `out/ppt-scripts/` 디렉토리 내 `index.md` 존재 확인
-3. 각 `{대상}-deck.md` 파일에서 `---` 구분자 수 카운트
-4. 대응하는 `{대상}-deck.pptx` 존재 및 크기 > 10KB 확인
-5. 이미지 모드 시 `images/` 디렉토리 존재 및 `index.md` 포함 확인
+1. ppt-writer SKILL.md의 완료 조건 체크박스 전항목 통과
+2. 각 `{대상}-spec.md`의 `## 슬라이드 N:` 매치 수 = 빌드된 `.pptx`의 슬라이드 수
+3. 이미지 모드 시 spec.md 내 `![](images/*.png)` 참조 파일 모두 디스크에 존재
+4. 빌드 실패 deck은 별도 리스트로 사용자에게 원인과 함께 보고
+5. pptxgenjs 미설치 시 graceful failure + `/finops:setup` 안내
+
+## MUST / MUST NOT
+
+**MUST**
+- Phase 순차 수행 및 완료 시마다 사용자 보고
+- Phase 0에서 pptxgenjs 설치 확인 (`cd out && node -e "require('pptxgenjs')"`)
+- Phase 1은 orchestrator가 직접 수행 (artifact 선별 + 이미지 생성)
+- Phase 2는 산출물당 1회 pptx-spec-writer 에이전트 위임 (5항목 프롬프트)
+- Phase 3는 orchestrator가 직접 `build.js` 작성·실행 (산출물당 1회 루프)
+- Phase 3 시작 시 `pptx-build-guide.md` 전체(특히 6절 11항) 필독
+- 빌드 스크립트(`{대상}-build.js`)를 산출물로 보존
+- 실제 `.pptx` 파일 생성 및 `>10KB` 검증
+
+**MUST NOT**
+- `anthropic-skills:pptx` 등 외부 변환 스킬 호출
+- `anthropic-skills:pptx`에 Skill→Skill 위임
+- pptx-spec-writer 에이전트 우회 (orchestrator가 spec 직접 작성 금지)
+- Phase 순서 건너뛰기
+- 가이드 미독상태로 `build.js` 작성
+- 검증 없이 "생성 완료" 보고
+- Marp deck md(`*-deck.md`) 산출 (폐기됨 — spec.md가 유일한 중간 산출물)
 
 ## 상태 정리
 
-임시 상태 파일 미사용. 산출물은 `out/ppt-scripts/` 경로에 영구 저장됨.
+임시 상태 파일 미사용. 산출물은 `out/ppt-scripts/` 경로에 영구 저장.
+빌드 스크립트(`*-build.js`)도 산출물과 함께 보존 → 재빌드·디버깅 가능.
 
 ## 취소
 
-`cancelomc` 입력 시 현재 Phase 중단 및 스킬 종료. 이미 생성된 `.pptx` 파일은 보존됨.
+`cancelomc` 입력 시 현재 Phase 중단. 이미 생성된 `.pptx` 파일은 보존.
 
 ## 재개
 
-`out/ppt-scripts/index.md` 존재 여부로 Phase 1 완료를 판단함. 각 `{대상}-deck.md` 존재 여부로 Phase 2 완료를 판단함. 각 `{대상}-deck.pptx` 존재 여부로 Phase 3 완료를 판단함.
+- `out/ppt-scripts/index.md` 존재 → Phase 1 완료 판정
+- `{대상}-spec.md` 존재 → Phase 2 해당 deck 완료 판정
+- `{대상}-deck.pptx` 존재 → Phase 3 해당 deck 완료 판정
+- 실패 deck만 선택 재빌드 가능 (Phase 3만 재실행)
 
 ## 출력 형식
 
 ### 사용자 보고 형식 (권장)
 
 ```
-## PPT-Writer 생성 결과
+## PPT-Writer 생성 결과 (DMAP 2단계 빌드)
 
-### 생성된 .pptx 파일
-| 파일명 | 슬라이드 수 | 파일 크기 |
-|---|---|---|
-| out/ppt-scripts/{대상1}-deck.pptx | N슬라이드 | NKB |
-| out/ppt-scripts/{대상2}-deck.pptx | N슬라이드 | NKB |
+### 성공한 .pptx 파일
+| 파일명 | 슬라이드 수 | 파일 크기 | 빌드 스크립트 |
+|---|---|---|---|
+| out/ppt-scripts/{대상1}-deck.pptx | N | NKB | {대상1}-build.js |
+| out/ppt-scripts/{대상2}-deck.pptx | N | NKB | {대상2}-build.js |
+
+### 실패한 deck (있을 경우)
+| 대상 | 단계 | 오류 | 조치 |
+|---|---|---|---|
+| {대상3} | Phase 3 빌드 | ... | 재빌드 또는 spec 수정 |
 
 ### 이미지 생성 현황
 - 모드: [이미지 포함 | 텍스트만]
@@ -188,6 +223,7 @@ Phase 2에서 생성된 Marp deck md 목록을 루프 돌며 각각 위임함.
 ### 파일 경로
 - 선별 결과: out/ppt-scripts/index.md
 - 이미지: out/ppt-scripts/images/ (이미지 모드 시)
-- Marp deck md: out/ppt-scripts/{대상}-deck.md
+- Spec md: out/ppt-scripts/{대상}-spec.md
+- 빌드 스크립트: out/ppt-scripts/{대상}-build.js
 - PowerPoint: out/ppt-scripts/{대상}-deck.pptx
 ```

@@ -1,0 +1,193 @@
+version: "1.0.0"
+source: "SaaS LLM (OpenAI / Anthropic)"
+spec_version: "1.3"
+exchange_rate: 1500
+billing_currency_out: "KRW"
+
+columns:
+  - source_column: "cost_usd"
+    focus_column: "BilledCost"
+    transform: "multiply"
+    formula: "cost_usd * 1500"
+    notes: "USD → KRW 변환. 소수점 2자리 반올림."
+
+  - source_column: "cost_usd"
+    focus_column: "EffectiveCost"
+    transform: "multiply"
+    formula: "cost_usd * 1500"
+    notes: "SaaS LLM은 선납 약정 없음. BilledCost와 동일."
+
+  - source_column: "api_key_hash"
+    focus_column: "BillingAccountId"
+    transform: "direct"
+    formula: "api_key_hash"
+    notes: "API 키 해시값으로 계정 식별."
+
+  - source_column: "provider"
+    focus_column: "BillingAccountName"
+    transform: "template"
+    formula: "'hbt-' + provider"
+    notes: "예: 'hbt-anthropic', 'hbt-openai'."
+
+  - source_column: "(없음)"
+    focus_column: "BillingCurrency"
+    transform: "constant"
+    formula: "'KRW'"
+    notes: "정규화 후 단일 통화 KRW."
+
+  - source_column: "(없음)"
+    focus_column: "BillingPeriodStart"
+    transform: "constant"
+    formula: "'2026-03-01T00:00:00Z'"
+    notes: "월별 청구 기준 시작."
+
+  - source_column: "(없음)"
+    focus_column: "BillingPeriodEnd"
+    transform: "constant"
+    formula: "'2026-04-01T00:00:00Z'"
+    notes: "월별 청구 기준 종료 (exclusive)."
+
+  - source_column: "date"
+    focus_column: "ChargePeriodStart"
+    transform: "datetime_append"
+    formula: "date + 'T00:00:00Z'"
+    notes: "일별 집계 기준일 시작."
+
+  - source_column: "date"
+    focus_column: "ChargePeriodEnd"
+    transform: "date_add_1"
+    formula: "date + 1 day + 'T00:00:00Z'"
+    notes: "다음 날 00:00:00Z (exclusive)."
+
+  - source_column: "(없음)"
+    focus_column: "ChargeCategory"
+    transform: "constant"
+    formula: "'Usage'"
+    notes: "토큰 기반 사용량 과금."
+
+  - source_column: "(없음)"
+    focus_column: "ChargeClass"
+    transform: "constant"
+    formula: "null"
+    notes: "정상 청구."
+
+  - source_column: "provider, model"
+    focus_column: "ChargeDescription"
+    transform: "template"
+    formula: "provider + ' ' + model + ' API usage'"
+    notes: "예: 'anthropic claude-3-5-sonnet API usage'."
+
+  - source_column: "provider"
+    focus_column: "ServiceName"
+    transform: "case"
+    formula: "CASE WHEN provider='anthropic' THEN 'Anthropic API' WHEN provider='openai' THEN 'OpenAI API' ELSE provider + ' API' END"
+    notes: "제공자별 서비스명."
+
+  - source_column: "(없음)"
+    focus_column: "ServiceCategory"
+    transform: "constant"
+    formula: "'AI and Machine Learning'"
+    notes: "모든 SaaS LLM은 AI 카테고리."
+
+  - source_column: "(없음)"
+    focus_column: "ServiceSubcategory"
+    transform: "constant"
+    formula: "'Generative AI'"
+    notes: "생성형 AI 서비스."
+
+  - source_column: "provider"
+    focus_column: "ServiceProviderName"
+    transform: "case"
+    formula: "CASE WHEN provider='anthropic' THEN 'Anthropic' WHEN provider='openai' THEN 'OpenAI' ELSE provider END"
+    notes: "FOCUS v1.3 필수."
+
+  - source_column: "(없음)"
+    focus_column: "ChargeFrequency"
+    transform: "constant"
+    formula: "'Usage-Based'"
+    notes: "요청별 토큰 과금."
+
+  - source_column: "project"
+    focus_column: "SubAccountId"
+    transform: "null_if_empty"
+    formula: "IF project != '' THEN project ELSE null"
+    notes: "프로젝트 미지정 행 약 5% → null."
+
+  - source_column: "project"
+    focus_column: "SubAccountName"
+    transform: "null_if_empty"
+    formula: "IF project != '' THEN project ELSE null"
+    notes: "SubAccountId와 동일."
+
+  - source_column: "(없음)"
+    focus_column: "RegionId"
+    transform: "constant"
+    formula: "null"
+    notes: "SaaS API는 리전 정보 미제공."
+
+  - source_column: "(없음)"
+    focus_column: "ResourceId"
+    transform: "constant"
+    formula: "null"
+    notes: "SaaS 특성상 리소스 식별자 없음."
+
+  - source_column: "(없음)"
+    focus_column: "ConsumedQuantity"
+    transform: "constant"
+    formula: "null"
+    notes: "토큰 수는 AI 확장 컬럼(TokenCountInput/Output)으로 표현."
+
+  - source_column: "(없음)"
+    focus_column: "PricingCategory"
+    transform: "constant"
+    formula: "'Standard'"
+    notes: "공개 API 가격 기준."
+
+  - source_column: "tags"
+    focus_column: "Tags"
+    transform: "json_parse"
+    formula: "parse_json(tags)"
+    notes: "JSON 태그 파싱. 빈값이면 null."
+
+  # ── AI 확장 5종 ──────────────────────────────────────────────────────────
+  - source_column: "tokens_input"
+    focus_column: "TokenCountInput"
+    transform: "direct"
+    formula: "tokens_input"
+    notes: "입력 토큰 수. Anthropic: input_tokens / OpenAI: prompt_tokens."
+
+  - source_column: "tokens_output"
+    focus_column: "TokenCountOutput"
+    transform: "direct"
+    formula: "tokens_output"
+    notes: "출력 토큰 수. Anthropic: output_tokens / OpenAI: completion_tokens."
+
+  - source_column: "model"
+    focus_column: "ModelName"
+    transform: "direct"
+    formula: "model"
+    notes: "예: claude-3-5-sonnet, gpt-4o, gpt-4o-mini, o1."
+
+  - source_column: "(없음)"
+    focus_column: "GpuHours"
+    transform: "constant"
+    formula: "null"
+    notes: "토큰 기반 과금. GPU 시간 미노출."
+
+  - source_column: "(없음)"
+    focus_column: "GpuUtilization"
+    transform: "constant"
+    formula: "null"
+    notes: "ResourceId 없으므로 utilization 조인 불가."
+
+amortized_cost_logic:
+  all: "AmortizedCost_KRW = cost_usd * 1500 (선납 없음, EffectiveCost와 동일)"
+
+provider_model_reference:
+  anthropic:
+    - claude-3-5-sonnet
+    - claude-3-haiku
+  openai:
+    - gpt-4o
+    - gpt-4o-mini
+    - o1

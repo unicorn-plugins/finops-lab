@@ -1,0 +1,188 @@
+version: "1.0.0"
+source: "Azure Cost Export"
+spec_version: "1.3"
+exchange_rate: 1
+billing_currency_out: "KRW"
+notes: "Azure는 CostInBillingCurrency가 이미 KRW로 청구됨. USD×1500 변환 불필요."
+
+columns:
+  - source_column: "CostInBillingCurrency"
+    focus_column: "BilledCost"
+    transform: "direct"
+    formula: "CostInBillingCurrency"
+    notes: "이미 KRW. 소수점 2자리 반올림."
+
+  - source_column: "CostInBillingCurrency"
+    focus_column: "EffectiveCost"
+    transform: "direct"
+    formula: "CostInBillingCurrency"
+    notes: >
+      Azure Amortized Export 미사용 시 BilledCost와 동일.
+      Amortized Export 사용 시 별도 상각 처리 필요.
+
+  - source_column: "SubscriptionId"
+    focus_column: "BillingAccountId"
+    transform: "direct"
+    formula: "SubscriptionId"
+    notes: "Azure Subscription UUID."
+
+  - source_column: "SubscriptionName"
+    focus_column: "BillingAccountName"
+    transform: "direct"
+    formula: "SubscriptionName"
+    notes: "예: HBT-Enterprise."
+
+  - source_column: "BillingCurrency"
+    focus_column: "BillingCurrency"
+    transform: "direct"
+    formula: "BillingCurrency"
+    notes: "KRW 확인."
+
+  - source_column: "BillingPeriodStartDate"
+    focus_column: "BillingPeriodStart"
+    transform: "datetime_append"
+    formula: "BillingPeriodStartDate + 'T00:00:00Z'"
+    notes: "날짜 형식 → ISO 8601 UTC."
+
+  - source_column: "(없음)"
+    focus_column: "BillingPeriodEnd"
+    transform: "constant"
+    formula: "'2026-04-01T00:00:00Z'"
+    notes: "소스 미제공. 월 기준 다음 달 1일 00:00:00Z."
+
+  - source_column: "Date"
+    focus_column: "ChargePeriodStart"
+    transform: "datetime_append"
+    formula: "Date + 'T00:00:00Z'"
+    notes: "일별 청구 기준일."
+
+  - source_column: "Date"
+    focus_column: "ChargePeriodEnd"
+    transform: "date_add_1"
+    formula: "Date + 1 day + 'T00:00:00Z'"
+    notes: "FOCUS exclusive end. 청구일 다음 날 00:00:00Z."
+
+  - source_column: "ChargeType"
+    focus_column: "ChargeCategory"
+    transform: "case"
+    formula: "CASE WHEN ChargeType='Usage' THEN 'Usage' WHEN ChargeType='Purchase' THEN 'Purchase' ELSE 'Adjustment' END"
+    notes: "Azure ChargeType → FOCUS ChargeCategory 매핑."
+
+  - source_column: "(없음)"
+    focus_column: "ChargeClass"
+    transform: "constant"
+    formula: "null"
+    notes: "정상 청구 행. 정정 항목 없음."
+
+  - source_column: "MeterCategory, MeterSubCategory, MeterName"
+    focus_column: "ChargeDescription"
+    transform: "concat"
+    formula: "MeterCategory + ' - ' + MeterSubCategory + ' - ' + MeterName"
+    notes: "3개 컬럼 조합으로 자체 완결형 설명 구성."
+
+  - source_column: "MeterCategory"
+    focus_column: "ServiceName"
+    transform: "lookup"
+    formula: "lookup(MeterCategory, azure_service_map)"
+    notes: >
+      Virtual Machines→'Virtual Machines', SQL Database→'Azure SQL Database',
+      Storage→'Azure Blob Storage', App Service→'Azure App Service',
+      Azure Monitor→'Azure Monitor', Azure OpenAI→'Azure OpenAI'.
+
+  - source_column: "MeterCategory"
+    focus_column: "ServiceCategory"
+    transform: "lookup"
+    formula: "lookup(MeterCategory, azure_service_category_map)"
+    notes: >
+      Virtual Machines→'Compute', SQL Database→'Databases',
+      Storage→'Storage', App Service→'Web',
+      Azure Monitor→'Management and Governance', Azure OpenAI→'AI and Machine Learning'.
+
+  - source_column: "(없음)"
+    focus_column: "ServiceProviderName"
+    transform: "constant"
+    formula: "'Microsoft Azure'"
+    notes: "FOCUS v1.3 필수."
+
+  - source_column: "ChargeType"
+    focus_column: "ChargeFrequency"
+    transform: "case"
+    formula: "CASE WHEN ChargeType='Purchase' THEN 'One-Time' ELSE 'Usage-Based' END"
+    notes: "예약 구매: One-Time / 일반 사용: Usage-Based."
+
+  - source_column: "ResourceGroup"
+    focus_column: "SubAccountId"
+    transform: "direct"
+    formula: "ResourceGroup"
+    notes: "Azure Resource Group → SubAccountId."
+
+  - source_column: "ResourceGroup"
+    focus_column: "SubAccountName"
+    transform: "direct"
+    formula: "ResourceGroup"
+    notes: "SubAccountId와 동일."
+
+  - source_column: "ResourceLocation"
+    focus_column: "RegionId"
+    transform: "direct"
+    formula: "ResourceLocation"
+    notes: "koreacentral 등 Azure 리전 코드."
+
+  - source_column: "ResourceLocation"
+    focus_column: "RegionName"
+    transform: "lookup"
+    formula: "IF ResourceLocation='koreacentral' THEN 'Korea Central' ELSE ResourceLocation"
+    notes: "리전 표시명 룩업."
+
+  - source_column: "ResourceId"
+    focus_column: "ResourceId"
+    transform: "direct"
+    formula: "ResourceId"
+    notes: "Azure ARM 리소스 전체 경로. 빈값이면 null."
+
+  - source_column: "ResourceId"
+    focus_column: "ResourceName"
+    transform: "split_last"
+    formula: "ResourceId.split('/')[-1]"
+    notes: "ARM 경로에서 마지막 세그먼트 추출."
+
+  - source_column: "UsageQuantity"
+    focus_column: "ConsumedQuantity"
+    transform: "direct"
+    formula: "UsageQuantity"
+    notes: "실제 소비 수량."
+
+  - source_column: "UnitOfMeasure"
+    focus_column: "ConsumedUnit"
+    transform: "direct"
+    formula: "UnitOfMeasure"
+    notes: "Hours, GB 등."
+
+  - source_column: "ChargeType"
+    focus_column: "PricingCategory"
+    transform: "case"
+    formula: "CASE WHEN ChargeType='Purchase' THEN 'Committed' ELSE 'Standard' END"
+    notes: "예약 구매: Committed / 일반: Standard."
+
+  - source_column: "ReservationId"
+    focus_column: "CommitmentDiscountId"
+    transform: "null_if_empty"
+    formula: "IF ReservationId != '' THEN ReservationId ELSE null"
+    notes: "Azure Reserved Instance ID."
+
+  - source_column: "Tags"
+    focus_column: "Tags"
+    transform: "json_parse"
+    formula: "parse_json(Tags)"
+    notes: "Azure Tags는 이중 따옴표 이스케이프 형식. JSON 파싱 후 재직렬화."
+
+amortized_cost_logic:
+  on_demand: "AmortizedCost_KRW = CostInBillingCurrency"
+  reserved: "Amortized Export 사용 시 CostInBillingCurrency가 이미 상각 반영됨"
+
+ai_extension_columns:
+  TokenCountInput: null
+  TokenCountOutput: null
+  ModelName: "Azure OpenAI 행인 경우 MeterName에서 모델명 추출 가능 (샘플 미존재)"
+  GpuHours: null
+  GpuUtilization: "utilization-sample.csv ResourceId 조인. GPU 컬럼 없으므로 null."
