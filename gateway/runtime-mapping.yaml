@@ -1,8 +1,25 @@
 # finops 플러그인 — 추상 → 구체 매핑
 # 플러그인 생성 시점 최신 모델 기준. setup 스킬에서 사용자 확인 후 갱신.
+# 4런타임(claude-code / cursor / codex / antigravity) 모두에 대한 tier별 모델 엔트리를 포함함.
+# Step 4-A 런타임 어댑터 포인터 생성이 이 매핑을 읽어 각 런타임 스텁 frontmatter.model을 결정함.
 
 tier_mapping:
-  default:
+  claude-code:
+    HEAVY:
+      model: "claude-opus-4-7"
+    HIGH:
+      model: "claude-opus-4-7"
+    MEDIUM:
+      model: "claude-sonnet-4-6"
+    LOW:
+      model: "claude-haiku-4-5-20251001"
+    # 에이전트별 명시적 오버라이드 (가독성 목적)
+    overrides:
+      pptx-spec-writer:
+        MEDIUM:
+          model: "claude-sonnet-4-6"   # 경영진·교육 PPT 명세 설계 품질 확보
+
+  cursor:
     HEAVY:
       model: "claude-opus-4-7"
     HIGH:
@@ -12,10 +29,25 @@ tier_mapping:
     LOW:
       model: "claude-haiku-4-5-20251001"
 
-  # 에이전트별 명시적 오버라이드 (가독성 목적 — default와 동일 모델 사용)
-  pptx-spec-writer:
+  codex:
+    HEAVY:
+      model: "gpt-5.4"
+    HIGH:
+      model: "gpt-5.4"
     MEDIUM:
-      model: "claude-sonnet-4-6"   # 경영진·교육 PPT 명세 설계 품질 확보
+      model: "gpt-5.2-codex"
+    LOW:
+      model: "gpt-5.4-mini"
+
+  antigravity:
+    HEAVY:
+      model: "claude-opus-4-7"
+    HIGH:
+      model: "claude-opus-4-7"
+    MEDIUM:
+      model: "claude-sonnet-4-6"
+    LOW:
+      model: "claude-haiku-4-5-20251001"
 
 tool_mapping:
   # ── 이미지 생성 ── (@ppt-writer 슬라이드 일러스트)

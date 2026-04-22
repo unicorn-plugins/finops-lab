@@ -24,27 +24,48 @@ CLAUDE.md 라우팅 등록을 순차 수행함.
 
 ### Step 1: 플러그인 변수 확인 (`ulw` 활용)
 
-프로젝트 CLAUDE.md(`./CLAUDE.md`)에서 아래 4개 변수를 확인함.
+프로젝트 AGENTS.md(`./AGENTS.md`)의 `## 플러그인 변수` 섹션에서 아래 4개 변수를 확인함.
 
 | 변수 | 기대값 예시 |
 |------|------------|
-| `CLAUDE_RUNTIME` | `Claude Code` |
-| `DMAP_PLUGIN_DIR` | `C:\Users\hiond\workspace\dmap` |
-| `PLUGIN_DIR` | `C:\Users\hiond\workshop\finops-lab` |
+| `AI_RUNTIME` | `Claude Code` |
+| `DMAP_PLUGIN_DIR` | `/Users/dreamondal/plugins/dmap` |
+| `PLUGIN_DIR` | `/Users/dreamondal/plugins/finops-lab` |
 | `PLUGIN_NAME` | `finops` |
 
-누락된 변수 발견 시 사용자에게 해당 변수명과 예시값을 안내하고 `./CLAUDE.md`의 `## 플러그인 변수 설정` 섹션에 추가할 것을 요청함. 4개 모두 확인 시 Step 2로 진행함.
+누락된 변수 발견 시 사용자에게 해당 변수명과 예시값을 안내하고 `./AGENTS.md`의 `## 플러그인 변수` 섹션에 추가할 것을 요청함. 4개 모두 확인 시 Step 2로 진행함.
 
 ### Step 2: 런타임 최신 모델 버전 확인 (`ulw` 활용)
 
-`gateway/runtime-mapping.yaml`의 현재 `tier_mapping.default` 값을 읽어 사용자에게 표시함.
+`gateway/runtime-mapping.yaml`의 `tier_mapping.{claude-code, cursor, codex, antigravity}` 4런타임 엔트리를 읽어 사용자에게 표시함.
 
-WebFetch로 `https://docs.anthropic.com/en/docs/about-claude/models` 를 조회하여 Anthropic의 최신 Opus/Sonnet/Haiku 모델 버전을 확인함. WebFetch 접근 불가 시 사용자에게 최신 모델명 직접 입력을 안내함.
+**Claude 계열 런타임**(claude-code / cursor / antigravity):
+- WebFetch로 `https://docs.anthropic.com/en/docs/about-claude/models` 조회 → 최신 Opus/Sonnet/Haiku 확인
 
-현재 값과 최신 값을 비교하여 차이가 있을 경우 AskUserQuestion으로 갱신 여부를 질의함.
+**OpenAI 계열 런타임**(codex):
+- WebFetch로 OpenAI 모델 페이지 조회 → `gpt-5.4`(flagship), `gpt-5.2-codex`, `gpt-5.1-codex-max`, `gpt-5.4-mini` 중 최신 버전 확인
 
-- "Yes" 선택 시: `gateway/runtime-mapping.yaml`의 `tier_mapping.default` 항목을 최신 모델명으로 갱신함
+WebFetch 접근 불가 시 사용자에게 최신 모델명 직접 입력을 안내함.
+
+현재 값과 최신 값을 비교하여 차이가 있을 경우 AskUserQuestion으로 4런타임 일괄 갱신 여부를 질의함.
+
+- "Yes" 선택 시: `gateway/runtime-mapping.yaml`의 해당 tier_mapping 엔트리를 최신 모델명으로 갱신함 + **Step 2.5 실행**
 - "No" 선택 시: 현재 버전 유지, Step 3으로 진행함
+
+### Step 2.5: 런타임 어댑터 frontmatter 일괄 갱신 (`ulw` 활용)
+
+Step 2에서 tier_mapping이 갱신된 경우, 런타임 어댑터 포인터 스텁의 frontmatter `model:` 필드를 새 매핑값으로 일괄 치환함 (본문·주석은 절대 수정 금지).
+
+| 대상 경로 | 파일 | 매핑 참조 |
+|-----------|------|-----------|
+| `.claude/agents/*.md` | 9개 | `tier_mapping.claude-code.{tier}.model` |
+| `.cursor/agents/*.md` | 9개 | `tier_mapping.cursor.{tier}.model` |
+| `.codex/agents/*.toml` | 9개 | `tier_mapping.codex.{tier}.model` |
+| `.antigravity/agents/*.md` | 9개 | `tier_mapping.antigravity.{tier}.model` |
+
+각 어댑터 파일의 에이전트 이름으로 `agents/{name}/agentcard.yaml`을 참조하여 tier를 해결한 뒤, 런타임·tier 조합에 따른 최신 모델명으로 frontmatter `model:` 한 줄만 치환함. 총 36개 파일 일괄 처리.
+
+본 Step은 Step 2의 갱신 여부와 무관하게 어댑터 파일 존재 여부를 점검하며, 누락된 어댑터가 있으면 사용자에게 보고함.
 
 ### Step 3-A: generate_image 도구 설치 (`ulw` 활용)
 
@@ -116,8 +137,8 @@ AskUserQuestion으로 라우팅 등록 적용 범위를 질의함.
 
 | 선택지 | 대상 파일 | 동작 |
 |--------|----------|------|
-| 모든 프로젝트 | `~/.claude/CLAUDE.md` | 전역 라우팅 섹션 추가 |
-| 이 프로젝트만 | `./CLAUDE.md` | 현재 프로젝트 CLAUDE.md에 섹션 추가 |
+| 모든 프로젝트 | `~/.claude/CLAUDE.md` | 전역 라우팅 섹션 추가 (Claude Code 전역 설정) |
+| 이 프로젝트만 | `./AGENTS.md` | 현재 프로젝트 AGENTS.md에 섹션 추가 |
 
 등록 내용 (`## finops 플러그인` 섹션):
 
@@ -141,8 +162,9 @@ AskUserQuestion으로 라우팅 등록 적용 범위를 질의함.
 모든 Step 완료 후 결과를 체크리스트 형식으로 출력함.
 
 ```
-✅ Step 1: 플러그인 변수 4개 확인 완료
-✅ Step 2: 모델 버전 확인/갱신 완료 (HEAVY: claude-opus-4-7, MEDIUM: claude-sonnet-4-6, LOW: claude-haiku-4-5)
+✅ Step 1: 플러그인 변수 4개 확인 완료 (AI_RUNTIME·DMAP_PLUGIN_DIR·PLUGIN_DIR·PLUGIN_NAME)
+✅ Step 2: 4런타임 모델 버전 확인/갱신 완료 (claude-code·cursor·codex·antigravity)
+✅ Step 2.5: 런타임 어댑터 36개 frontmatter 일괄 갱신 완료
 ✅ Step 3-A: generate_image 설치 [완료 | 스킵]
 ✅ Step 3-B: pptxgenjs 설치 [완료 | 이미 설치됨 | 스킵(Node 미설치)]
 ✅ Step 4: 라우팅 테이블 등록 완료 ([모든 프로젝트 | 이 프로젝트만])
@@ -196,9 +218,10 @@ AskUserQuestion을 활용한 5가지 질의 (최대 5회):
 
 | Step | 완료 증거 |
 |------|----------|
-| Step 1 | `./CLAUDE.md` 내 4개 변수 존재 확인 (Read 도구 출력) |
-| Step 2 | `gateway/runtime-mapping.yaml` diff — 변경 전/후 모델명 출력 (갱신 선택 시) |
+| Step 1 | `./AGENTS.md` 내 4개 변수(`AI_RUNTIME`·`DMAP_PLUGIN_DIR`·`PLUGIN_DIR`·`PLUGIN_NAME`) 존재 확인 (Read 도구 출력) |
+| Step 2 | `gateway/runtime-mapping.yaml` diff — 4런타임 변경 전/후 모델명 출력 (갱신 선택 시) |
+| Step 2.5 | `.claude/agents/*.md`, `.cursor/agents/*.md`, `.codex/agents/*.toml`, `.antigravity/agents/*.md` frontmatter `model:` 필드가 runtime-mapping.yaml 값과 일치 |
 | Step 3-A | `python gateway/tools/generate_image.py --help` 정상 출력 (설치 선택 시) |
 | Step 3-B | `cd "$PLUGIN_DIR/out" && node -e "require('pptxgenjs')"` 정상 종료(exit 0) |
-| Step 4 | 대상 CLAUDE.md 내 `## finops 플러그인` 섹션 존재 확인 (Read 도구 출력) |
+| Step 4 | 대상 파일(AGENTS.md 또는 ~/.claude/CLAUDE.md) 내 `## finops 플러그인` 섹션 존재 확인 (Read 도구 출력) |
 | Step 5 | 체크리스트 출력 및 다음 단계 안내 완료 |

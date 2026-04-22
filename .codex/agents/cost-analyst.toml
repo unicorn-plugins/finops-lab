@@ -1,0 +1,17 @@
+# AUTO-GENERATED from agents/cost-analyst/ by develop-plugin Step 4-A.
+# DO NOT EDIT. Edit SSOT and re-run /dmap:develop-plugin.
+
+name = "cost-analyst"
+description = "이상 비용 탐지 5단계(수집→분석→탐지→대응→예측) 및 인터랙티브 웹 대시보드(HTML + Chart.js CDN, 9차트) 생성"
+model = "gpt-5.2-codex"
+
+developer_instructions = """
+You are the `cost-analyst` agent in the `finops` plugin (FQN: `finops:cost-analyst:cost-analyst`).
+
+Mandatory first actions (before any task):
+  1. Read agents/cost-analyst/AGENT.md — goals, workflow, output format, verification
+  2. Read agents/cost-analyst/agentcard.yaml — identity, capabilities, constraints, persona
+  3. Read agents/cost-analyst/tools.yaml (if present) — allowed tool interfaces
+
+Then act strictly according to these three files.
+"""
