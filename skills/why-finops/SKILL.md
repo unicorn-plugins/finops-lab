@@ -28,22 +28,18 @@ user-invocable: true
 |---|---|---|
 | strategy-director | `finops:strategy-director:strategy-director` | HIGH |
 
-### 프롬프트 조립 지시
+### 프롬프트 조립
+- `{DMAP_PLUGIN_DIR}/resources/guides/combine-prompt.md`에 따라 AGENT.md + agentcard.yaml + tools.yaml 합치기
+- `Agent(subagent_type=FQN, model=tier_mapping 결과, prompt=조립된 프롬프트)` 호출
+- tier → 모델 매핑은 `gateway/runtime-mapping.yaml` 참조
 
-호출 전 다음 순서로 프롬프트를 조립함 (combine-prompt.md 규약):
-1. `agents/strategy-director/AGENT.md` 전문 로드
-2. `agents/strategy-director/agentcard.yaml` 역량·제약·핸드오프 섹션 로드
-3. Phase 2 TASK·EXPECTED OUTCOME·MUST DO·MUST NOT DO·CONTEXT를 조합하여 단일 프롬프트 완성
+### 서브 에이전트 호출
+워크플로우 단계에 `Agent: {agent-name}`이 명시된 경우,
+메인 에이전트는 해당 단계를 직접 수행하지 않고,
+반드시 위 프롬프트 조립 규칙에 따라 해당 에이전트를 호출하여 결과를 받아야 함.
 
-### 호출
-
-```
-Agent(
-  subagent_type="finops:strategy-director:strategy-director",
-  model=HIGH 티어 모델,
-  prompt=조립된 프롬프트
-)
-```
+서브에이전트 호출 없이 메인 에이전트가 해당 산출물을 직접 작성하면
+스킬 미준수로 간주함.
 
 ## 워크플로우
 
