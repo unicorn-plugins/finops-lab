@@ -3,6 +3,9 @@ import pandas as pd
 import numpy as np
 import json
 
+# 파이프라인: analyze_data.py -> chart_data.json -> build_facttable.py(교차필터 fact 주입) -> build_dashboard.py
+# 이 스크립트 재실행 후에는 반드시 build_facttable.py를 실행해야 대시보드 교차필터가 동작함.
+
 df = pd.read_csv('out/focus-normalized.csv')
 df['ChargePeriodStart'] = pd.to_datetime(df['ChargePeriodStart'])
 df['date'] = df['ChargePeriodStart'].dt.strftime('%Y-%m-%d')

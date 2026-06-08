@@ -4,6 +4,9 @@ import json
 with open('out/chart_data.json', 'r', encoding='utf-8') as f:
     d = json.load(f)
 
+if 'fact' not in d:
+    raise SystemExit("out/chart_data.json에 'fact' 키가 없습니다. 먼저 'python scripts/build_facttable.py'를 실행하세요.")
+
 # Serialize data as compact JSON strings for embedding
 dates_json = json.dumps(d['dates'])
 csps_json = json.dumps(d['csps'])
@@ -20,6 +23,7 @@ unit_econ_json = json.dumps(d['unit_econ'])
 filter_options_json = json.dumps(d['filter_options'])
 daily_by_cc_json = json.dumps(d['daily_by_cc'])
 daily_by_proj_json = json.dumps(d['daily_by_proj'])
+fact_json = json.dumps(d['fact'])  # 레코드 단위 팩트테이블 (build_facttable.py가 주입) — 클라이언트 교차필터 집계용
 
 # Anomaly banner items
 anomaly_rows = ""
@@ -28,7 +32,8 @@ for a in d['anomalies']:
     if a['rule'] == 'YoY':
         rule_detail = f"YoY +{a.get('yoy_pct',0)}% (전년 동기 대비 50% 이상 초과)"
     else:
-        normal_range = f"μ={a['mu']:,} ± 3σ={a['sigma']:,}"
+        three_sigma = a['threshold'] - a['mu']  # 정상범위 폭 = μ+3σ(threshold) - μ
+        normal_range = f"μ={a['mu']:,} ± 3σ={three_sigma:,} → 상한 {a['threshold']:,}"
         rule_detail = f"{a['rule']} (z={a['zscore']}) | 정상범위: {normal_range} KRW"
     anomaly_rows += f"""
       <div class="anomaly-card {sev_cls}">
@@ -102,6 +107,7 @@ html = f"""<!DOCTYPE html>
     .filter-bar {{ background: var(--card); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: .8rem; }}
     .filter-bar label {{ color: var(--sub); font-weight: 600; }}
     .filter-bar select {{ border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; background: var(--bg); color: var(--text); font-size: .8rem; }}
+    .filter-bar select:disabled {{ opacity: .35; cursor: not-allowed; }}
     .filter-bar input[type=range] {{ width: 180px; accent-color: var(--accent); }}
     .range-label {{ font-size: .78rem; color: var(--sub); min-width: 170px; }}
 
@@ -208,11 +214,11 @@ html = f"""<!DOCTYPE html>
     </div>
     <div class="grid-2">
       <div class="chart-card">
-        <h3>CSP별 비용 분포</h3>
+        <h3>CSP별 비용 분포 <small style="font-size:.7rem;color:#aaa;">(기간·CostCenter·Project 반영)</small></h3>
         <div class="chart-wrap"><canvas id="chart2"></canvas></div>
       </div>
       <div class="chart-card">
-        <h3>서비스별 Top 10 비용</h3>
+        <h3>서비스별 Top 10 비용 <small style="font-size:.7rem;color:#aaa;">(기간·CostCenter·Project 반영)</small></h3>
         <div class="chart-wrap"><canvas id="chart3"></canvas></div>
       </div>
       <div class="chart-card">
@@ -220,7 +226,7 @@ html = f"""<!DOCTYPE html>
         <div class="chart-wrap"><canvas id="chart4"></canvas></div>
       </div>
       <div class="chart-card">
-        <h3>월별 YoY 비교 <small style="font-size:.7rem;color:#aaa;">(2025-03 시뮬레이션 baseline)</small></h3>
+        <h3>월별 YoY 비교 <small style="font-size:.7rem;color:#aaa;">(2025-03 시뮬레이션 baseline · 기간/CostCenter/Project 미적용)</small></h3>
         <div class="chart-wrap"><canvas id="chart5"></canvas></div>
       </div>
     </div>
@@ -234,19 +240,19 @@ html = f"""<!DOCTYPE html>
         <div class="chart-wrap"><canvas id="chart6"></canvas></div>
       </div>
       <div class="chart-card">
-        <h3>모델 성능 지표 분포 (Radar)</h3>
+        <h3>모델 성능 지표 분포 (Radar) <small style="font-size:.7rem;color:#aaa;">(모델 성능 지표 · 비용/CostCenter/Project 미적용)</small></h3>
         <div class="chart-wrap"><canvas id="chart7"></canvas></div>
       </div>
     </div>
     <div class="grid-1" style="margin-top:16px;">
       <div class="chart-card">
-        <h3>AI 비용 트렌드 (일별)</h3>
+        <h3>AI 비용 트렌드 (일별) <small style="font-size:.7rem;color:#aaa;">(기간·CostCenter·Project·Model 반영)</small></h3>
         <div class="chart-wrap short"><canvas id="chart8"></canvas></div>
       </div>
     </div>
     <div class="grid-1" style="margin-top:16px;">
       <div class="chart-card">
-        <h3>AI 단위경제 지표</h3>
+        <h3>AI 단위경제 지표 <small style="font-size:.7rem;color:#aaa;">(모델별 단위가격 · Model 반영 · CostCenter/Project 미적용)</small></h3>
         <div class="ue-grid">
           <div class="ue-item highlight">
             <div class="ue-val">2.00%</div>
@@ -308,6 +314,7 @@ const UNIT_ECON = {unit_econ_json};
 const FILTER_OPT = {filter_options_json};
 const DAILY_BY_CC = {daily_by_cc_json};
 const DAILY_BY_PROJ = {daily_by_proj_json};
+const FACT = {fact_json};  // [date,csp,service,cc,proj,model,cost,inCost,outCost]
 
 // Color palette
 const CSP_COLORS = {{
@@ -347,56 +354,90 @@ function updateDateRange(val) {{
   const startDate = DATES[30 - dateRange] || DATES[0];
   const endDate = DATES[30];
   document.getElementById('rangeLabel').textContent = startDate + ' ~ ' + endDate;
-  rebuildChart1();
-  rebuildChart4();
-  rebuildChart8();
+  rebuildAllCharts();  // 기간은 c1/c2/c3/c4/c6/c8에 영향 → 전체 재빌드
 }}
 
 function applyFilters() {{
-  // Filters affect chart labels/titles - full rebuild for simplicity
   rebuildAllCharts();
 }}
+
+// ============================================================
+// 팩트테이블 교차필터 집계 레이어
+const FCOL = {{ date:0, csp:1, svc:2, cc:3, proj:4, model:5, cost:6, inCost:7, outCost:8 }};
+function activeFilters() {{
+  return {{
+    cc: document.getElementById('ccFilter').value,
+    proj: document.getElementById('projFilter').value,
+    model: document.getElementById('modelFilter').value,
+    startDate: DATES[30 - dateRange] || DATES[0]
+  }};
+}}
+// opts.useModel: Model 필터 적용 여부 / opts.requireAI: AI 행(model!=='')으로 한정
+function filteredFacts(opts) {{
+  opts = opts || {{}};
+  const f = activeFilters();
+  return FACT.filter(r =>
+    r[FCOL.date] >= f.startDate
+    && (!f.cc || r[FCOL.cc] === f.cc)
+    && (!f.proj || r[FCOL.proj] === f.proj)
+    && (!opts.useModel || !f.model || r[FCOL.model] === f.model)
+    && (!opts.requireAI || r[FCOL.model] !== '')
+  );
+}}
+function sumByCol(facts, keyIdx, valIdx) {{
+  const m = new Map();
+  for (const r of facts) m.set(r[keyIdx], (m.get(r[keyIdx]) || 0) + r[valIdx]);
+  return m;
+}}
+// 날짜 윈도우 라벨 + 그룹별 일자 시계열
+function dailyByGroup(facts, groupIdx) {{
+  const win = DATES.slice(30 - dateRange);
+  const idx = new Map(win.map((d, i) => [d, i]));
+  const out = new Map();
+  for (const r of facts) {{
+    const di = idx.get(r[FCOL.date]); if (di === undefined) continue;
+    const g = r[groupIdx];
+    if (!out.has(g)) out.set(g, new Array(win.length).fill(0));
+    out.get(g)[di] += r[FCOL.cost];
+  }}
+  return {{ win, out }};
+}}
+// 빈 데이터 시 '데이터 없음' 표기 (재작성 차트 c1/c2/c3/c6/c8 공용)
+const emptyText = {{
+  id: 'emptyText',
+  afterDraw(chart) {{
+    const total = (chart.data.datasets || []).reduce(
+      (s, d) => s + (d.data || []).reduce((a, b) => a + (Number(b) || 0), 0), 0);
+    if (total === 0) {{
+      const a = chart.chartArea; if (!a) return;
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.fillStyle = chartDefaults().textColor;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '13px sans-serif';
+      ctx.fillText('데이터 없음 (필터 조합에 해당 비용 없음)', (a.left + a.right) / 2, (a.top + a.bottom) / 2);
+      ctx.restore();
+    }}
+  }}
+}};
 
 // ============================================================
 // Chart 1: Daily trend line
 function buildChart1() {{
   const cd = chartDefaults();
-  const slicedDates = DATES.slice(30 - dateRange);
-  const ccFilter = document.getElementById('ccFilter').value;
-  const projFilter = document.getElementById('projFilter').value;
-
-  let datasets;
-  if (ccFilter) {{
-    // Show single CostCenter total vs all CSPs
-    datasets = [{{
-      label: 'CostCenter: ' + ccFilter,
-      data: (DAILY_BY_CC[ccFilter] || []).slice(30 - dateRange),
-      borderColor: '#8b5cf6',
-      backgroundColor: '#8b5cf622',
-      fill: false, tension: 0.3, pointRadius: 3,
-    }}];
-  }} else if (projFilter) {{
-    datasets = [{{
-      label: 'Project: ' + projFilter,
-      data: (DAILY_BY_PROJ[projFilter] || []).slice(30 - dateRange),
-      borderColor: '#f59e0b',
-      backgroundColor: '#f59e0b22',
-      fill: false, tension: 0.3, pointRadius: 3,
-    }}];
-  }} else {{
-    datasets = CSPS.map(csp => ({{
-      label: csp,
-      data: DAILY[csp].slice(30 - dateRange),
-      borderColor: CSP_COLORS[csp] || '#999',
-      backgroundColor: CSP_COLORS[csp] + '22',
-      fill: false,
-      tension: 0.3,
-      pointRadius: 3,
-    }}));
-  }}
+  // 날짜+CC+Project 필터 적용한 팩트를 CSP별 일자 시계열로 집계 (Model은 CSP 관점 무관)
+  const {{ win, out }} = dailyByGroup(filteredFacts({{ useModel: false, requireAI: false }}), FCOL.csp);
+  const datasets = CSPS.map(csp => ({{
+    label: csp,
+    data: out.get(csp) || new Array(win.length).fill(0),
+    borderColor: CSP_COLORS[csp] || '#999',
+    backgroundColor: (CSP_COLORS[csp] || '#999') + '22',
+    fill: false, tension: 0.3, pointRadius: 3,
+  }}));
   charts.c1 = new Chart(document.getElementById('chart1'), {{
     type: 'line',
-    data: {{ labels: slicedDates, datasets }},
+    data: {{ labels: win, datasets }},
+    plugins: [emptyText],
     options: {{
       responsive: true, maintainAspectRatio: false,
       plugins: {{
@@ -414,14 +455,16 @@ function buildChart1() {{
 // Chart 2: CSP Doughnut
 function buildChart2() {{
   const cd = chartDefaults();
-  const labels = Object.keys(CSP_TOTAL);
-  const vals = Object.values(CSP_TOTAL);
+  const m = sumByCol(filteredFacts({{ useModel: false, requireAI: false }}), FCOL.csp, FCOL.cost);
+  const labels = CSPS.filter(c => (m.get(c) || 0) > 0);
+  const vals = labels.map(c => m.get(c));
   charts.c2 = new Chart(document.getElementById('chart2'), {{
     type: 'doughnut',
     data: {{
       labels,
       datasets: [{{ data: vals, backgroundColor: labels.map(l => CSP_COLORS[l] || '#999'), borderWidth: 2 }}]
     }},
+    plugins: [emptyText],
     options: {{
       responsive: true, maintainAspectRatio: false,
       plugins: {{
@@ -435,12 +478,17 @@ function buildChart2() {{
 // Chart 3: Service Top10 HBar
 function buildChart3() {{
   const cd = chartDefaults();
+  const m = sumByCol(filteredFacts({{ useModel: false, requireAI: false }}), FCOL.svc, FCOL.cost);
+  const top = [...m.entries()].filter(e => e[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const labels = top.map(e => e[0]);
+  const vals = top.map(e => e[1]);
   charts.c3 = new Chart(document.getElementById('chart3'), {{
     type: 'bar',
     data: {{
-      labels: SVC_TOP10.labels,
-      datasets: [{{ label: '비용 (KRW)', data: SVC_TOP10.values, backgroundColor: '#3b82f6cc', borderRadius: 4 }}]
+      labels: labels,
+      datasets: [{{ label: '비용 (KRW)', data: vals, backgroundColor: '#3b82f6cc', borderRadius: 4 }}]
     }},
+    plugins: [emptyText],
     options: {{
       indexAxis: 'y',
       responsive: true, maintainAspectRatio: false,
@@ -513,14 +561,13 @@ function buildChart5() {{
 // Chart 6: Model Token Stacked Bar
 function buildChart6() {{
   const cd = chartDefaults();
-  const modelFilter = document.getElementById('modelFilter').value;
-  let labels = AI_TOKEN.labels;
-  let inp = AI_TOKEN.input_costs;
-  let out = AI_TOKEN.output_costs;
-  if (modelFilter) {{
-    const idx = labels.indexOf(modelFilter);
-    if (idx >= 0) {{ labels = [labels[idx]]; inp = [inp[idx]]; out = [out[idx]]; }}
-  }}
+  // AI 행만, 날짜+CC+Project+Model 필터 → 모델별 입력/출력 비용 합산
+  const facts = filteredFacts({{ useModel: true, requireAI: true }});
+  const mi = sumByCol(facts, FCOL.model, FCOL.inCost);
+  const mo = sumByCol(facts, FCOL.model, FCOL.outCost);
+  const labels = AI_TOKEN.labels.filter(m => mi.has(m) || mo.has(m));  // 안정적 표시 순서 유지
+  const inp = labels.map(m => mi.get(m) || 0);
+  const out = labels.map(m => mo.get(m) || 0);
   charts.c6 = new Chart(document.getElementById('chart6'), {{
     type: 'bar',
     data: {{
@@ -530,6 +577,7 @@ function buildChart6() {{
         {{ label: '출력 토큰 비용', data: out, backgroundColor: '#10b981cc', borderRadius: 4 }},
       ]
     }},
+    plugins: [emptyText],
     options: {{
       responsive: true, maintainAspectRatio: false,
       plugins: {{ legend: {{ labels: {{ color: cd.textColor }} }}, tooltip: {{ callbacks: {{ label: ctx => ctx.dataset.label + ': ' + (ctx.raw/1000).toFixed(1)+'K KRW' }} }} }},
@@ -578,15 +626,21 @@ function buildChart7() {{
 // Chart 8: AI Trend Line
 function buildChart8() {{
   const cd = chartDefaults();
-  const slicedDates = AI_TREND.dates.slice(30 - dateRange);
-  const slicedVals = AI_TREND.values.slice(30 - dateRange);
+  // AI 행만, 날짜+CC+Project+Model 필터 → 일자별 총 AI 비용
+  const facts = filteredFacts({{ useModel: true, requireAI: true }});
+  const win = DATES.slice(30 - dateRange);
+  const idx = new Map(win.map((dt, i) => [dt, i]));
+  const vals = new Array(win.length).fill(0);
+  for (const r of facts) {{
+    const di = idx.get(r[FCOL.date]); if (di !== undefined) vals[di] += r[FCOL.cost];
+  }}
   charts.c8 = new Chart(document.getElementById('chart8'), {{
     type: 'line',
     data: {{
-      labels: slicedDates,
+      labels: win,
       datasets: [{{
         label: 'AI 일별 비용',
-        data: slicedVals,
+        data: vals,
         borderColor: '#8b5cf6',
         backgroundColor: '#8b5cf622',
         fill: true,
@@ -594,6 +648,7 @@ function buildChart8() {{
         pointRadius: 3,
       }}]
     }},
+    plugins: [emptyText],
     options: {{
       responsive: true, maintainAspectRatio: false,
       plugins: {{ legend: {{ labels: {{ color: cd.textColor }} }}, tooltip: {{ callbacks: {{ label: ctx => (ctx.raw/1000).toFixed(1)+'K KRW' }} }} }},
@@ -608,14 +663,24 @@ function buildChart8() {{
 // Chart 9: Unit economics bar
 function buildChart9() {{
   const cd = chartDefaults();
+  const modelFilter = document.getElementById('modelFilter').value;
+  let labels = UNIT_ECON.metrics;
+  let vals = UNIT_ECON.values;
+  if (modelFilter) {{
+    // 메트릭 라벨은 "{{모델}} Input/1K" 형태 → 마지막 공백 앞을 모델명으로 추출 (gpt-4o vs gpt-4o-mini 구분)
+    const keep = labels.map(m => m.substring(0, m.lastIndexOf(' ')) === modelFilter);
+    const fl = labels.filter((_, i) => keep[i]);
+    const fv = vals.filter((_, i) => keep[i]);
+    if (fl.length > 0) {{ labels = fl; vals = fv; }}  // 해당 모델 단위경제 데이터 없으면 전체 유지
+  }}
   charts.c9 = new Chart(document.getElementById('chart9'), {{
     type: 'bar',
     data: {{
-      labels: UNIT_ECON.metrics,
+      labels: labels,
       datasets: [{{
         label: 'Cost/1K Tokens (KRW)',
-        data: UNIT_ECON.values,
-        backgroundColor: UNIT_ECON.values.map(v => v > 50 ? '#ef4444cc' : v > 5 ? '#f59e0bcc' : '#10b981cc'),
+        data: vals,
+        backgroundColor: vals.map(v => v > 50 ? '#ef4444cc' : v > 5 ? '#f59e0bcc' : '#10b981cc'),
         borderRadius: 4,
       }}]
     }},
@@ -630,9 +695,6 @@ function buildChart9() {{
   }});
 }}
 
-function rebuildChart1() {{ if (charts.c1) {{ charts.c1.destroy(); }} buildChart1(); }}
-function rebuildChart4() {{ if (charts.c4) {{ charts.c4.destroy(); }} buildChart4(); }}
-function rebuildChart8() {{ if (charts.c8) {{ charts.c8.destroy(); }} buildChart8(); }}
 
 function rebuildAllCharts() {{
   Object.values(charts).forEach(c => c.destroy());
@@ -642,15 +704,27 @@ function rebuildAllCharts() {{
 }}
 
 // Tabs
+// 탭별 적용 가능한 필터만 활성화 (정직성: 무관한 필터는 비활성화 + '전체'로 리셋해 stale 적용 방지)
+function applyTabFilterState(name) {{
+  // CC/Project는 양 탭 모두 적용 가능(AI 레코드도 CostCenter/Project 태그 보유) → 항상 활성
+  // Model은 CSP 차트에 차원이 없어 CSP 탭에서만 비활성 + '전체'로 리셋
+  const model = document.getElementById('modelFilter');
+  model.disabled = (name === 'csp');
+  if (model.disabled) model.value = '';
+}}
+
 function switchTab(name, btn) {{
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
+  applyTabFilterState(name);
+  rebuildAllCharts();
 }}
 
 // Init
 document.addEventListener('DOMContentLoaded', () => {{
+  applyTabFilterState('csp');
   buildChart1(); buildChart2(); buildChart3(); buildChart4(); buildChart5();
   buildChart6(); buildChart7(); buildChart8(); buildChart9();
 }});
