@@ -31,4 +31,7 @@ node_modules/
 # Playwright MCP 임시 산출물
 .playwright-mcp/
 
+# 스크래치/임시 작업 디렉토리
+.temp/
+
 # (중요) output/ 은 제외하지 않음 — 산출물 보존
