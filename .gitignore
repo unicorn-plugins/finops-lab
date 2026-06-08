@@ -25,4 +25,10 @@ node_modules/
 .dmap/
 .omc/
 
+# Claude Code 로컬 설정
+.claude/settings.local.json
+
+# Playwright MCP 임시 산출물
+.playwright-mcp/
+
 # (중요) output/ 은 제외하지 않음 — 산출물 보존
